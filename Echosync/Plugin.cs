@@ -64,13 +64,11 @@ public sealed class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
-        WindowSystem.RemoveAllWindows();
-
-        ConfigWindow.Dispose();
-
-        CommandManager.RemoveHandler(CommandName);
         addonTalkHelper.Dispose();
         RabbitMQHelper.Dispose();
+        WindowSystem.RemoveAllWindows();
+        ConfigWindow.Dispose();
+        CommandManager.RemoveHandler(CommandName);
     }
 
     private void OnCommand(string command, string args)

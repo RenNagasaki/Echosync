@@ -1,27 +1,24 @@
 using Dalamud.Plugin.Services;
-using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using Echosync.DataClasses;
 using Echosync.Enums;
-using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Runtime.Intrinsics.X86;
-using System.Net.Security;
+using Apache.NMS;
+using Apache.NMS.Util;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
 
 namespace Echosync.Helper
 {
     public static class RabbitMQHelper
     {
         public static Dictionary<string, bool> ConnectedPlayers = new Dictionary<string, bool>();
-        private static ConnectionFactory? Factory;
+        private static IConnectionFactory Factory;
         private static IConnection Connection;
-        private static IModel? Channel;
-        private static EventingBasicConsumer Consumer;
+        private static ISession Session;
+        private static IDestination Destination;
+        private static IMessageConsumer Consumer;
+        private static IMessageProducer Producer;
         private static Configuration Configuration;
         private static string ActiveChannel = "";
         private static IClientState ClientState;
@@ -32,14 +29,17 @@ namespace Echosync.Helper
             Configuration = configuration;
             ClientState = clientState;
             EntityId = ClientState.LocalPlayer?.EntityId.ToString();
-            Factory = new ConnectionFactory { HostName = DataClasses.Constants.RabbitMQConnectionUrl };
-            Factory.RequestedConnectionTimeout = new TimeSpan(0, 0, 5);
-            Factory.Port = 5672;
-            Factory.UserName = "Echosync-User";
-            Factory.Password = "1234432112344321";
+            try
+            {
+                IConnectionFactory factory = new NMSConnectionFactory(DataClasses.Constants.RabbitMQConnectionUrl);
 
-            if (!string.IsNullOrWhiteSpace(configuration.SyncChannel) && configuration.ConnectAtStart)
-                Connect(new EKEventId(0, Enums.TextSource.Sync));
+                if (!string.IsNullOrWhiteSpace(configuration.SyncChannel) && configuration.ConnectAtStart)
+                    Connect(new EKEventId(0, Enums.TextSource.Sync));
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while connecting: {ex}", new EKEventId(0, TextSource.Sync));
+            }
         }
 
         public static void Test(EKEventId eventId)
@@ -49,21 +49,49 @@ namespace Echosync.Helper
             CreateMessage(RabbitMQMessages.Test, eventId);
         }
 
-        private static void ConsumerReceived(object? model, BasicDeliverEventArgs ea)
+        public static void Connect(EKEventId eventId)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(ActiveChannel))
+                    Disconnect(eventId);
+
+                ActiveChannel = Configuration.SyncChannel;
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Connecting to channel: {ActiveChannel}", eventId);
+
+                if (Connection == null || !Connection.IsStarted)
+                    Connection = Factory.CreateConnection(DataClasses.Constants.RabbitMQUserName, DataClasses.Constants.RabbitMQPassword);
+
+                Session = Connection.CreateSession(); 
+                Destination = SessionUtil.GetDestination(Session, $"queue://{ActiveChannel}");
+                Consumer = Session.CreateConsumer(Destination);
+                Consumer.Listener += Consumer_Listener;
+                Producer = Session.CreateProducer(Destination);
+                Producer.DeliveryMode = MsgDeliveryMode.Persistent;
+
+                CreateMessage(RabbitMQMessages.Connect, eventId);
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while connecting: {ex}", eventId);
+            }
+        }
+
+        private static void Consumer_Listener(IMessage message)
         {
             var bodyString = "";
             var eventId = new EKEventId(0, TextSource.Sync);
             try
             {
-                var body = ea.Body.ToArray();
-                bodyString = Encoding.UTF8.GetString(body);
+                var textMessage = (ITextMessage)message;
+                bodyString = textMessage.Text;
                 var bodyStringSplit = bodyString.Split('|');
-                var message = (RabbitMQMessages)Convert.ToInt32(bodyStringSplit[0]);
+                var messageEnum = (RabbitMQMessages)Convert.ToInt32(bodyStringSplit[0]);
                 var sendingPlayer = bodyStringSplit[1];
                 eventId = LogHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.Sync);
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Received '{message}' from '{sendingPlayer}'", eventId);
 
-                switch (message)
+                switch (messageEnum)
                 {
                     case RabbitMQMessages.Connect:
                         if (!ConnectedPlayers.ContainsKey(sendingPlayer))
@@ -95,49 +123,16 @@ namespace Echosync.Helper
             LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
         }
 
-        public static void Connect(EKEventId eventId)
-        {
-            try
-            {
-                if (!string.IsNullOrWhiteSpace(ActiveChannel))
-                    Disconnect(eventId);
-
-                if (Connection == null || !Connection.IsOpen)
-                    Connection = Factory.CreateConnection();
-
-                ActiveChannel = Configuration.SyncChannel;
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Connecting to channel: {ActiveChannel}", eventId);
-                Connection = Factory.CreateConnection();
-                Channel = Connection.CreateModel();
-                var res = Channel.QueueDeclare(queue: ActiveChannel,
-                                        durable: false,
-                                        exclusive: false,
-                                        autoDelete: false,
-                                        arguments: null);
-                Consumer = new EventingBasicConsumer(Channel);
-                Consumer.Received += ConsumerReceived;
-                Channel.BasicConsume(queue: ActiveChannel,
-                                        autoAck: true,
-                                        consumer: Consumer);
-
-                CreateMessage(RabbitMQMessages.Connect, eventId);
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while connecting: {ex}", eventId);
-            }
-        }
-
         public static void Disconnect(EKEventId eventId)
         {
             try
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Disconnecting from channel: {ActiveChannel}", eventId);
                 CreateMessage(RabbitMQMessages.Disconnect, eventId);
-                Consumer.Received -= ConsumerReceived;
-                Consumer.OnCancel();
-                Channel?.Dispose();
-                Connection?.Dispose();
+                Consumer.Dispose();
+                Producer.Dispose();
+                Session.Dispose();
+                Connection.Dispose();
             }
             catch (Exception ex)
             {
@@ -149,17 +144,15 @@ namespace Echosync.Helper
         {
             try
             {
-                if (Connection == null || !Connection.IsOpen)
+                if (Connection == null || !Connection.IsStarted)
                 {
                     Connect(eventId);
                 }
 
                 var bodyString = $"{((int)message)}|{EntityId}";
-                var body = Encoding.UTF8.GetBytes(bodyString);
-                Channel.BasicPublish(exchange: string.Empty,
-                                        routingKey: ActiveChannel,
-                                        basicProperties: null,
-                                        body: body);
+                var request = Session.CreateTextMessage(bodyString);
+
+                Producer.Send(request);
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Sending '{message.ToString()}' to channel: {ActiveChannel}", eventId);
             }
             catch (Exception ex)
