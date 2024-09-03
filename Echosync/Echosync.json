@@ -1,0 +1,10 @@
+{
+    "Author": "Ren Nagasaki",
+    "Name": "Echosync",
+    "Punchline": "Tired of storying alone? Fret no further. Here comes Echosync!",
+    "Description": "A description that shows up in /xlplugins. List any major slash-command(s).",
+    "ApplicableVersion": "any",
+    "Tags": [
+        "Sync"
+    ]
+}
