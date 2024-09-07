@@ -106,7 +106,14 @@ public class ConfigWindow : Window, IDisposable
                 this.Configuration.Save();
 
                 if (connectAtStart)
-                    RabbitMQHelper.Connect(new EKEventId(0, TextSource.Sync));
+                    SyncClientHelper.Connect();
+            }
+
+            var syncServer = this.Configuration.SyncServer;
+            if (ImGui.InputText($"Sync server##ESBaseUrl", ref syncServer, 80))
+            {
+                this.Configuration.SyncServer = syncServer;                
+                this.Configuration.Save();
             }
 
             var syncChannel = this.Configuration.SyncChannel;
@@ -116,24 +123,25 @@ public class ConfigWindow : Window, IDisposable
                 this.Configuration.Save();
             }
             ImGui.SameLine();
-            if (RabbitMQHelper.ConnectedPlayers.Count > 0)
+            if (SyncClientHelper.Connected)
             {
                 if (ImGui.Button($"Disconnect##ESDisconnect"))
                 {
-                    RabbitMQHelper.Disconnect(new EKEventId(0, TextSource.Sync));
+                    SyncClientHelper.Disconnect();
                 }
             }
             else
             {
                 if (ImGui.Button($"Connect##ESConnect"))
                 {
-                    RabbitMQHelper.Connect(new EKEventId(0, TextSource.Sync));
+                    SyncClientHelper.Connect();
                 }
             }
 
             if (ImGui.Button($"Test Connection##ESTestConnection"))
             {
-                RabbitMQHelper.Test(new EKEventId(0, TextSource.None));
+
+                SyncClientHelper.Test();
             }
         }
     }

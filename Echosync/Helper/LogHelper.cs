@@ -10,7 +10,7 @@ namespace Echosync.Helper
     {
         private static IPluginLog Log;
         private static Configuration Config;
-        private static int NextEventId = 0;
+        private static int NextEventId = 1;
         private static List<LogMessage> GeneralLogs = new List<LogMessage>();
         public static List<LogMessage> GeneralLogsFiltered = new List<LogMessage>();
         private static List<LogMessage> ChatLogs = new List<LogMessage>();

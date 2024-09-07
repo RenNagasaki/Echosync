@@ -44,9 +44,9 @@ public sealed class Plugin : IDalamudPlugin
 
         ConfigWindow = new ConfigWindow(this);
 
-        this.addonTalkHelper = new AddonTalkHelper(this, condition, addonLifecycle, clientState, objectTable, Configuration);
+        this.addonTalkHelper = new AddonTalkHelper(this, condition, framework, addonLifecycle, clientState, objectTable, Configuration);
         LogHelper.Setup(log, Configuration);
-        RabbitMQHelper.Setup(Configuration, clientState);
+        SyncClientHelper.Setup(Configuration, clientState);
 
         WindowSystem.AddWindow(ConfigWindow);
 
@@ -65,7 +65,7 @@ public sealed class Plugin : IDalamudPlugin
     public void Dispose()
     {
         addonTalkHelper.Dispose();
-        RabbitMQHelper.Dispose();
+        SyncClientHelper.Dispose();
         WindowSystem.RemoveAllWindows();
         ConfigWindow.Dispose();
         CommandManager.RemoveHandler(CommandName);

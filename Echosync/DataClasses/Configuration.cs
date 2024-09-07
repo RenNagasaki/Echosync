@@ -12,6 +12,7 @@ public class Configuration : IPluginConfiguration
     public bool SomePropertyToBeSavedAndWithADefault { get; set; } = true;
     public bool Enabled { get; set; } = true;
     public bool ConnectAtStart { get; set; } = false;
+    public string SyncServer { get; set; } = "wss://echosync.hogwarts-library.de";
     public string SyncChannel { get; set; } = "";
     public LogConfig logConfig { get; set; } = new LogConfig();
 
