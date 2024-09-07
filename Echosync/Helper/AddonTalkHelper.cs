@@ -66,7 +66,7 @@ namespace Echosync.Helper
                 {
                     activeDialogue = dialogue;
                     SyncClientHelper.CurrentEvent = LogHelper.EventId(MethodBase.GetCurrentMethod().Name, Enums.TextSource.Sync);
-                    SyncClientHelper.CreateMessage(SyncMessages.JoinDialogue, clientState.LocalPlayer?.Name.TextValue ?? "TEST", activeDialogue);
+                    SyncClientHelper.CreateMessage(SyncMessages.JoinDialogue, activeDialogue);
                 }
 
 
@@ -81,7 +81,7 @@ namespace Echosync.Helper
                 if (!visible && !string.IsNullOrWhiteSpace(activeDialogue) && SyncClientHelper.Connected)
                 {
                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Addon closed", SyncClientHelper.CurrentEvent);
-                    SyncClientHelper.CreateMessage(SyncMessages.LeaveDialogue, clientState.LocalPlayer?.Name.TextValue ?? "TEST", activeDialogue);
+                    SyncClientHelper.CreateMessage(SyncMessages.LeaveDialogue, activeDialogue);
                     LogHelper.End(MethodBase.GetCurrentMethod().Name, SyncClientHelper.CurrentEvent);
                     readySend = false;
                     SyncClientHelper.AllReady = false;
@@ -110,7 +110,7 @@ namespace Echosync.Helper
 
                 if (!readySend)
                 {
-                    SyncClientHelper.CreateMessage(SyncMessages.Click, clientState.LocalPlayer?.Name.TextValue ?? "TEST", activeDialogue);
+                    SyncClientHelper.CreateMessage(SyncMessages.Click, activeDialogue);
                     readySend = true;
                 }
             }

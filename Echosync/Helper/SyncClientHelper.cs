@@ -138,7 +138,7 @@ namespace Echosync.Helper
             }
         }
 
-        public static void CreateMessage(SyncMessages message, string extra = "", string extra2 = "")
+        public static void CreateMessage(SyncMessages message, string extra = "")
         {
             try
             {
@@ -149,10 +149,10 @@ namespace Echosync.Helper
                     return;
                 }
 
+                var characterName = "|" + ClientState.LocalPlayer?.Name.TextValue + "@" + ClientState.LocalPlayer?.HomeWorld.Id ?? "TEST";
                 extra = !string.IsNullOrWhiteSpace(extra) ? "|" + extra : "";
-                extra2 = !string.IsNullOrWhiteSpace(extra2) ? "|" + extra2 : "";
 
-                var bodyString = $"{((int)message)}{extra}{extra2}";
+                var bodyString = $"{((int)message)}{characterName}{extra}";
                 WebSocket.Send(bodyString);
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Sent '{message.ToString()}' to channel: {ActiveChannel}", CurrentEvent);
             }
