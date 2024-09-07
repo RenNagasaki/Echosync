@@ -11,6 +11,7 @@ namespace Echosync_Data.Enums
         Test,
         CreateChannel,
         JoinDialogue,
+        LeaveDialogue,
         Click,
         ClickDone,
         ServerShutdown

@@ -79,6 +79,14 @@ namespace Echosync_Server.Behaviours
                         UsersReadyState[_channelName].TryAdd(dialogue, new Dictionary<string, bool>());
                         UsersReadyState[_channelName][dialogue].TryAdd(userName, false);
                         break;
+                    case SyncMessages.LeaveDialogue:
+                        userName = messageSplit[1];
+                        dialogue = messageSplit[2];
+                        LogHelper.Log($"Message received: '{messageEnum}' from '{userName}/{clientID}' in channel '{_channelName}' for dialogue '{dialogue}'");
+
+                        if (UsersReadyState[_channelName].ContainsKey(dialogue))
+                            UsersReadyState[_channelName][dialogue].Remove(userName);
+                        break;
                     case SyncMessages.Click:
                         userName = messageSplit[1];
                         dialogue = messageSplit[2];

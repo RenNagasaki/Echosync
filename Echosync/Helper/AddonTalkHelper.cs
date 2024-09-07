@@ -56,14 +56,13 @@ namespace Echosync.Helper
         {
             if (!config.Enabled) return;
             if (condition[ConditionFlag.OccupiedSummoningBell]) return;
-            if (!condition[ConditionFlag.OccupiedInQuestEvent] && !condition[ConditionFlag.OccupiedInCutSceneEvent] && !condition[ConditionFlag.OccupiedInEvent]) return;
 
             var addonTalk = (AddonTalk*)args.Addon.ToPointer();
             if (addonTalk != null)
             {
                 var visible = addonTalk->AtkUnitBase.IsVisible;
                 var dialogue = GetTalkAddonText((AddonTalk*)args.Addon.ToPointer());
-                if (visible && activeDialogue != dialogue)
+                if (visible && activeDialogue != dialogue && SyncClientHelper.Connected)
                 {
                     activeDialogue = dialogue;
                     SyncClientHelper.CurrentEvent = LogHelper.EventId(MethodBase.GetCurrentMethod().Name, Enums.TextSource.Sync);
@@ -71,7 +70,7 @@ namespace Echosync.Helper
                 }
 
 
-                if (SyncClientHelper.AllReady)
+                if (SyncClientHelper.AllReady && SyncClientHelper.Connected)
                 {
                     SyncClientHelper.AllReady = false;
                     readySend = false;
@@ -79,9 +78,11 @@ namespace Echosync.Helper
                     framework.RunOnFrameworkThread(() => Click(args.Addon, SyncClientHelper.CurrentEvent));
                 }
 
-                if (!visible && !string.IsNullOrWhiteSpace(activeDialogue))
+                if (!visible && !string.IsNullOrWhiteSpace(activeDialogue) && SyncClientHelper.Connected)
                 {
-                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Addon closed", new EKEventId(0, TextSource.Sync));
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Addon closed", SyncClientHelper.CurrentEvent);
+                    SyncClientHelper.CreateMessage(SyncMessages.LeaveDialogue, clientState.LocalPlayer?.Name.TextValue ?? "TEST", activeDialogue);
+                    LogHelper.End(MethodBase.GetCurrentMethod().Name, SyncClientHelper.CurrentEvent);
                     readySend = false;
                     SyncClientHelper.AllReady = false;
                     activeDialogue = "";
@@ -97,7 +98,8 @@ namespace Echosync.Helper
             if (!condition[ConditionFlag.OccupiedInQuestEvent] && !condition[ConditionFlag.OccupiedInCutSceneEvent] && !condition[ConditionFlag.OccupiedInEvent]) return;
             if (args is not AddonReceiveEventArgs receiveEventArgs) return;
 
-            if (receiveEventArgs.AtkEventType == (byte)AtkEventType.MouseClick && receiveEventArgs.EventParam == 0 && SyncClientHelper.Connected)
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Param: {receiveEventArgs.EventParam} Type: {receiveEventArgs.AtkEventType} B: {receiveEventArgs.AtkEvent}", SyncClientHelper.CurrentEvent);
+            if ((receiveEventArgs.AtkEventType == (byte)AtkEventType.MouseClick || receiveEventArgs.AtkEventType == (byte)AtkEventType.InputReceived) && receiveEventArgs.EventParam == 0 && SyncClientHelper.Connected)
             {
                 if (allowClick)
                 {
@@ -108,13 +110,12 @@ namespace Echosync.Helper
 
                 if (!readySend)
                 {
-                    SyncClientHelper.CurrentEvent = LogHelper.EventId(MethodBase.GetCurrentMethod().Name, Enums.TextSource.Sync);
                     SyncClientHelper.CreateMessage(SyncMessages.Click, clientState.LocalPlayer?.Name.TextValue ?? "TEST", activeDialogue);
                     readySend = true;
                 }
-
-                receiveEventArgs.AtkEventType = 0;
             }
+
+            receiveEventArgs.AtkEventType = 0;
         }
 
         private unsafe string GetTalkAddonText(AddonTalk* addonTalk)
