@@ -10,7 +10,7 @@ It connect's you and your companions together. Just join a channel and start sto
 * This plugin is still in it's early stages of development, feel free to report any issues here or on my [![Discord](https://img.shields.io/badge/Join-Discord-blue)](https://discord.gg/5gesjDfDBr) (preferred)
 
 ## Commands
-* `/es`: Opens the configuration window.
+* `/es` - Opens the configuration window.
 
 ## Features
 * Syncs all DIALOGUES in the game, meaning: If you start talking to, for example, Glazrael in the Lower Decks and your synced friend does so as well, the dialogue only advances after both of you tried to advance it(Sending ready to server).
