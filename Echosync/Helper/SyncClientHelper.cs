@@ -8,6 +8,7 @@ using Echosync_Data.Enums;
 using WebSocketSharp;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using static Dalamud.Interface.Utility.Raii.ImRaii;
 
 namespace Echosync.Helper
 {
@@ -20,6 +21,8 @@ namespace Echosync.Helper
         private static string EntityId = "";
         public static bool Connected = false;
         public static bool AllReady = false;
+        public static int ConnectedPlayersDialogue = 0;
+        public static int ConnectedPlayersReady = 0;
         private static EKEventId currentEvent;
         private static string SyncServerThread = "main";
 
@@ -36,7 +39,7 @@ namespace Echosync.Helper
             EntityId = ClientState.LocalPlayer?.EntityId.ToString();
             try
             {
-                if (configuration.ConnectAtStart)
+                if (configuration.ConnectAtStart && configuration.Enabled)
                 {
                     Connect();
                 }
@@ -138,7 +141,7 @@ namespace Echosync.Helper
             }
         }
 
-        public static void CreateMessage(SyncMessages message, string extra = "")
+        public static void CreateMessage(SyncMessages message, string dialogue = "")
         {
             try
             {
@@ -150,9 +153,35 @@ namespace Echosync.Helper
                 }
 
                 var characterName = "|" + ClientState.LocalPlayer?.Name.TextValue + "@" + ClientState.LocalPlayer?.HomeWorld.Id ?? "TEST";
-                extra = !string.IsNullOrWhiteSpace(extra) ? "|" + extra : "";
+                var npcId = !string.IsNullOrWhiteSpace(AddonTalkHelper.ActiveNpcId) ? "|" + AddonTalkHelper.ActiveNpcId : "";
+                dialogue = !string.IsNullOrWhiteSpace(dialogue) ? "|" + dialogue : "";
 
-                var bodyString = $"{((int)message)}{characterName}{extra}";
+                var bodyString = $"{((int)message)}{characterName}{npcId}{dialogue}";
+                WebSocket.Send(bodyString);
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Sent '{message.ToString()}' to channel: {ActiveChannel}", CurrentEvent);
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while sending message: {ex}", CurrentEvent);
+            }
+        }
+
+        public static void CreateMessageFake(SyncMessages message, string dialogue = "")
+        {
+            try
+            {
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Sending '{message.ToString()}' to channel: {ActiveChannel}", CurrentEvent);
+                if (!Connected)
+                {
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Not connected: {WebSocket.ReadyState}", CurrentEvent);
+                    return;
+                }
+
+                var characterName = "|" + "Fake";
+                var npcId = !string.IsNullOrWhiteSpace(AddonTalkHelper.ActiveNpcId) ? "|" + AddonTalkHelper.ActiveNpcId : "";
+                dialogue = !string.IsNullOrWhiteSpace(dialogue) ? "|" + dialogue : "";
+
+                var bodyString = $"{((int)message)}{characterName}{npcId}{dialogue}";
                 WebSocket.Send(bodyString);
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Sent '{message.ToString()}' to channel: {ActiveChannel}", CurrentEvent);
             }
@@ -206,16 +235,43 @@ namespace Echosync.Helper
             try
             {
                 var textMessage = e.Data;
-                var messageEnum = (SyncMessages)Convert.ToInt32(textMessage);
+                var messageSplit = textMessage.Split('|');
+                var messageEnum = (SyncMessages)Convert.ToInt32(messageSplit[0]);
 
                 switch (messageEnum)
                 {
                     case SyncMessages.ClickDone:
                         AllReady = true;
-                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Received command '{messageEnum}' in channel '{ActiveChannel}'", CurrentEvent);
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Received message '{messageEnum}' in channel '{ActiveChannel}'", CurrentEvent);
+                        break;
+                    case SyncMessages.ClickWait:
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Received message '{messageEnum}' in channel '{ActiveChannel}'", CurrentEvent);
+                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Waiting for other users", CurrentEvent);
+                        break;
+                    case SyncMessages.ClickWaitCatchup:
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Received message '{messageEnum}' in channel '{ActiveChannel}'", CurrentEvent);
+                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Waiting for other users to catch up", CurrentEvent);
+                        break;
+                    case SyncMessages.ConnectedPlayersDialogue:
+                        var npcId = messageSplit[1];
+                        var dialogue = messageSplit[2];
+                        if (npcId == AddonTalkHelper.ActiveNpcId && dialogue == AddonTalkHelper.ActiveDialogue)
+                        {
+                            ConnectedPlayersDialogue = Convert.ToInt32(messageSplit[3]);
+                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Received message '{messageEnum} - {ConnectedPlayersDialogue}' in channel '{ActiveChannel}'", CurrentEvent);
+                        }
+                        break;
+                    case SyncMessages.ConnectedPlayersReady:
+                        npcId = messageSplit[1];
+                        dialogue = messageSplit[2];
+                        if (npcId == AddonTalkHelper.ActiveNpcId && dialogue == AddonTalkHelper.ActiveDialogue)
+                        {
+                            ConnectedPlayersReady = Convert.ToInt32(messageSplit[3]);
+                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Received message '{messageEnum} - {ConnectedPlayersReady}' in channel '{ActiveChannel}'", CurrentEvent);
+                        }
                         break;
                     case SyncMessages.ServerShutdown:
-                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Received command '{messageEnum}' in channel '{ActiveChannel}'", CurrentEvent);
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Received message '{messageEnum}' in channel '{ActiveChannel}'", CurrentEvent);
                         Disconnect(true);
                         break;
                 }

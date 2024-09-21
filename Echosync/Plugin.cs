@@ -22,6 +22,7 @@ public sealed class Plugin : IDalamudPlugin
 
     public readonly WindowSystem WindowSystem = new("Echosync");
     private ConfigWindow ConfigWindow { get; init; }
+    internal ReadyStateWindow ReadyStateWindow { get; init; }
     private AddonTalkHelper addonTalkHelper { get; set; }
 
     public Plugin(
@@ -43,12 +44,14 @@ public sealed class Plugin : IDalamudPlugin
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
         ConfigWindow = new ConfigWindow(this);
+        ReadyStateWindow = new ReadyStateWindow(this, dataManager);
 
         this.addonTalkHelper = new AddonTalkHelper(this, condition, framework, addonLifecycle, clientState, objectTable, Configuration);
         LogHelper.Setup(log, Configuration);
         SyncClientHelper.Setup(Configuration, clientState);
 
         WindowSystem.AddWindow(ConfigWindow);
+        WindowSystem.AddWindow(ReadyStateWindow);
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
@@ -68,6 +71,7 @@ public sealed class Plugin : IDalamudPlugin
         SyncClientHelper.Dispose();
         WindowSystem.RemoveAllWindows();
         ConfigWindow.Dispose();
+        ReadyStateWindow.Dispose();
         CommandManager.RemoveHandler(CommandName);
     }
 

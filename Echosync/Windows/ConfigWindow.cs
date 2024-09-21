@@ -8,6 +8,7 @@ using Echosync.DataClasses;
 using Echosync.Enums;
 using Echosync.Helper;
 using System.Collections.Generic;
+using Echosync_Data.Enums;
 
 namespace Echosync;
 
@@ -32,7 +33,7 @@ public class ConfigWindow : Window, IDisposable
     // We give this window a constant ID using ###
     // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
     // and the window ID will always be "###XYZ counter window" for ImGui
-    public ConfigWindow(Plugin plugin) : base("Echosync")
+    public ConfigWindow(Plugin plugin) : base("Echosync-Configuration")
     {
         Flags = ImGuiWindowFlags.AlwaysVerticalScrollbar & ImGuiWindowFlags.HorizontalScrollbar & ImGuiWindowFlags.AlwaysHorizontalScrollbar;
         Size = new Vector2(540, 480);
@@ -60,8 +61,6 @@ public class ConfigWindow : Window, IDisposable
     {
         DrawSettings();
     }
-
-    #region Settings
     private void DrawSettings()
     {
         try
@@ -78,6 +77,11 @@ public class ConfigWindow : Window, IDisposable
                     DrawLogs();
                     ImGui.EndTabItem();
                 }
+                if (ImGui.BeginTabItem("Fakeuser"))
+                {
+                    DrawFakeUser();
+                    ImGui.EndTabItem();
+                }
             }
 
             ImGui.EndTabBar();
@@ -88,6 +92,8 @@ public class ConfigWindow : Window, IDisposable
         }
     }
 
+
+    #region Settings
     private void DrawGeneral()
     {
         var enabled = this.Configuration.Enabled;
@@ -341,6 +347,29 @@ public class ConfigWindow : Window, IDisposable
 
                 ImGui.EndTable();
             }
+        }
+    }
+    #endregion
+    #region FakeUser
+    private void DrawFakeUser()
+    {
+        if (ImGui.Button($"Start NPC##ESStartNpc"))
+        {
+            SyncClientHelper.CreateMessageFake(SyncMessages.StartNpc);
+        }
+        ImGui.SameLine();
+        if (ImGui.Button($"End NPC##ESEndNpc"))
+        {
+            SyncClientHelper.CreateMessageFake(SyncMessages.EndNpc);
+        }
+        if (ImGui.Button($"Join Dialogue##ESJoinDialogue"))
+        {
+            SyncClientHelper.CreateMessageFake(SyncMessages.JoinDialogue, AddonTalkHelper.ActiveDialogue);
+        }
+        ImGui.SameLine();
+        if (ImGui.Button($"Click##ESClick"))
+        {
+            SyncClientHelper.CreateMessageFake(SyncMessages.Click, AddonTalkHelper.ActiveDialogue);
         }
     }
     #endregion

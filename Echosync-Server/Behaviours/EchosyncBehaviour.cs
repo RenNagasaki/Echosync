@@ -23,11 +23,11 @@ namespace Echosync_Server.Behaviours
         {
             try
             {
-                LogHelper.Log($"Client with guid '{ID}' connected to main service!");
+                LogHelper.Log("Main", $"Client with guid '{ID}' connected to main service!");
             }
             catch (Exception ex)
             {
-                LogHelper.Log($"Error while client '{ID}' connected to main service: {ex}");
+                LogHelper.Log("Main", $"Error while client '{ID}' connected to main service: {ex}", true);
             }
 
             base.OnOpen();
@@ -37,11 +37,11 @@ namespace Echosync_Server.Behaviours
         {
             try
             {
-                LogHelper.Log($"Client with guid '{ID}' disconnected from main service!");
+                LogHelper.Log("Main", $"Client with guid '{ID}' disconnected from main service!");
             }
             catch (Exception ex)
             {
-                LogHelper.Log($"Error while client '{ID}' disconnected from main service: {ex}");
+                LogHelper.Log("Main", $"Error while client '{ID}' disconnected from main service: {ex}", true);
             }
 
             base.OnClose(e);
@@ -56,7 +56,7 @@ namespace Echosync_Server.Behaviours
                 var messageSplit = message.Split('|');
                 var messageEnum = (SyncMessages)Convert.ToInt32(messageSplit[0]);
 
-                LogHelper.Log($"Message received: '{messageEnum}' from '{clientID}'");
+                LogHelper.Log("Main", $"Message received: '{messageEnum}' from '{clientID}'");
                 switch (messageEnum)
                 {
                     case SyncMessages.CreateChannel:
@@ -64,10 +64,10 @@ namespace Echosync_Server.Behaviours
                         if (_server.WebSocketServices.Hosts.ToList().Find(p => p.Path == $"/{channel}") == null)
                         {
                             _server.AddWebSocketService($"/{channel}", () => new EchosyncChannelBehaviour(_server, channel));
-                            LogHelper.Log($"User '{clientID}' created channel '{channel}'");
+                            LogHelper.Log("Main", $"User '{clientID}' created channel '{channel}'");
                         }
                         else
-                            LogHelper.Log($"User '{clientID}' requested existing channel '{channel}'");
+                            LogHelper.Log("Main", $"User '{clientID}' requested existing channel '{channel}'");
                         Send($"{(int)SyncMessages.CreateChannel}");
                         break;
                     case SyncMessages.Test:
@@ -77,7 +77,7 @@ namespace Echosync_Server.Behaviours
             }
             catch (Exception ex)
             {
-                LogHelper.Log($"Illegal message from '{clientID}': {ex}");
+                LogHelper.Log("Main", $"Illegal message from '{clientID}': {ex}", true);
             }
         }
     }

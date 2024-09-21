@@ -10,9 +10,15 @@ namespace Echosync_Data.Enums
     {
         Test,
         CreateChannel,
+        ConnectedPlayersDialogue,
+        ConnectedPlayersReady,
+        StartNpc,
+        EndNpc,
         JoinDialogue,
-        LeaveDialogue,
         Click,
+        ClickForce,
+        ClickWait,
+        ClickWaitCatchup,
         ClickDone,
         ServerShutdown
     }

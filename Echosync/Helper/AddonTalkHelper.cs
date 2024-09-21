@@ -12,6 +12,9 @@ using Echosync_Data.Enums;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using Dalamud.Game.Text.SeStringHandling;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using System.Collections.Generic;
+using System.Numerics;
 
 namespace Echosync.Helper
 {
@@ -19,6 +22,10 @@ namespace Echosync.Helper
     {
         private record struct AddonTalkState(string? Speaker, string? Text);
 
+        public static string ActiveNpcId = "";
+        public static string ActiveDialogue = "";
+        public static Vector2 AddonPos = new Vector2(0, 0);
+        public static float AddonScale = 1f;
         private OnUpdateDelegate updateHandler;
         private readonly ICondition condition;
         private readonly IFramework framework;
@@ -30,7 +37,7 @@ namespace Echosync.Helper
         public DateTime timeNextVoice = DateTime.Now;
         private bool readySend = false;
         private bool allowClick = false;
-        private string activeDialogue = "";
+        private bool joinedDialogue = false;
         private AddonTalkState lastValue;
 
         public AddonTalkHelper(Plugin plugin, ICondition condition, IFramework framework, IAddonLifecycle addonLifecycle, IClientState clientState, IObjectTable objectTable, Configuration config)
@@ -60,13 +67,34 @@ namespace Echosync.Helper
             var addonTalk = (AddonTalk*)args.Addon.ToPointer();
             if (addonTalk != null)
             {
+
+                AddonPos = new Vector2(addonTalk->GetX(), addonTalk->GetY());
+                AddonScale = addonTalk->Scale;
                 var visible = addonTalk->AtkUnitBase.IsVisible;
+
                 var dialogue = GetTalkAddonText((AddonTalk*)args.Addon.ToPointer());
-                if (visible && activeDialogue != dialogue && SyncClientHelper.Connected)
+                if (visible && ActiveDialogue != dialogue && SyncClientHelper.Connected)
                 {
-                    activeDialogue = dialogue;
+                    if (string.IsNullOrWhiteSpace(ActiveNpcId))
+                    {
+                        var localPlayer = clientState.LocalPlayer;
+                        if (localPlayer != null)
+                        {
+                            var target = localPlayer.TargetObject;
+
+                            if (target != null)
+                            {
+                                ActiveNpcId = target.GameObjectId.ToString();
+                                SyncClientHelper.CreateMessage(SyncMessages.StartNpc);
+                            }
+                        }
+                    }
+                    ActiveDialogue = dialogue;
                     SyncClientHelper.CurrentEvent = LogHelper.EventId(MethodBase.GetCurrentMethod().Name, Enums.TextSource.Sync);
-                    SyncClientHelper.CreateMessage(SyncMessages.JoinDialogue, activeDialogue);
+                    SyncClientHelper.CreateMessage(SyncMessages.JoinDialogue, ActiveDialogue);
+                    joinedDialogue = true;
+                    if (!plugin.ReadyStateWindow.IsOpen)
+                        plugin.ReadyStateWindow.Toggle();
                 }
 
 
@@ -78,16 +106,20 @@ namespace Echosync.Helper
                     framework.RunOnFrameworkThread(() => Click(args.Addon, SyncClientHelper.CurrentEvent));
                 }
 
-                if (!visible && !string.IsNullOrWhiteSpace(activeDialogue) && SyncClientHelper.Connected)
+                if (!visible && !string.IsNullOrWhiteSpace(ActiveDialogue) && SyncClientHelper.Connected)
                 {
                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Addon closed", SyncClientHelper.CurrentEvent);
-                    SyncClientHelper.CreateMessage(SyncMessages.LeaveDialogue, activeDialogue);
+                    SyncClientHelper.CreateMessage(SyncMessages.EndNpc);
                     LogHelper.End(MethodBase.GetCurrentMethod().Name, SyncClientHelper.CurrentEvent);
                     readySend = false;
                     SyncClientHelper.AllReady = false;
-                    activeDialogue = "";
+                    SyncClientHelper.ConnectedPlayersDialogue = 0;
+                    SyncClientHelper.ConnectedPlayersReady = 0;
+                    ActiveDialogue = "";
+                    ActiveNpcId = "";
+                    if (plugin.ReadyStateWindow.IsOpen)
+                        plugin.ReadyStateWindow.Toggle();
                 }
-
             }
         }
 
@@ -104,14 +136,19 @@ namespace Echosync.Helper
                 if (allowClick)
                 {
                     allowClick = false;
+                    joinedDialogue = false;
                     LogHelper.End(MethodBase.GetCurrentMethod().Name, SyncClientHelper.CurrentEvent);
                     return;
                 }
 
-                if (!readySend)
+                if (!readySend && joinedDialogue)
                 {
-                    SyncClientHelper.CreateMessage(SyncMessages.Click, activeDialogue);
+                    SyncClientHelper.CreateMessage(SyncMessages.Click, ActiveDialogue);
                     readySend = true;
+                }
+                if (readySend && joinedDialogue && receiveEventArgs.AtkEventType == (byte)AtkEventType.InputReceived)
+                {
+                    SyncClientHelper.CreateMessage(SyncMessages.ClickForce, ActiveDialogue);
                 }
             }
 

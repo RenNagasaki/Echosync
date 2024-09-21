@@ -12,9 +12,9 @@ public class Program
 
     static void Main(string[] args)
     {
-        LogHelper.Log($"Starting server with port '{Port}'!");
+        LogHelper.Log("Main", $"Starting server with port '{Port}'!");
         var wssv = new HttpServer(Port);
-        LogHelper.Log($"Starting main Thread!");
+        LogHelper.Log("Main", $"Starting main Thread!");
         wssv.AddWebSocketService<EchosyncBehaviour>("/main", () => new EchosyncBehaviour(wssv));
         wssv.Start();
 
@@ -22,7 +22,7 @@ public class Program
         while (command != "quit")
         {
             command = Console.ReadLine();
-            LogHelper.Log($"Command '{command}' entered");
+            LogHelper.Log("Main", $"Command '{command}' entered");
         }
 
         wssv.WebSocketServices.Broadcast($"{((int)SyncMessages.ServerShutdown)}");

@@ -5,9 +5,11 @@ VisualStudioVersion = 17.10.34916.146
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Echosync", "Echosync\Echosync.csproj", "{13C812E9-0D42-4B95-8646-40EEBF30636F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Echosync-Server", "Echosync-Server\Echosync-Server.csproj", "{879FC7FB-5B24-4775-BC34-073A30C95A57}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Echosync-Server", "Echosync-Server\Echosync-Server.csproj", "{879FC7FB-5B24-4775-BC34-073A30C95A57}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Echosync-Data", "Echosync-Data\Echosync-Data.csproj", "{F4898945-1598-42A7-963C-AAFEB3F5786D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Echosync-Data", "Echosync-Data\Echosync-Data.csproj", "{F4898945-1598-42A7-963C-AAFEB3F5786D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Data", "Data", "{9C64E85B-198F-465A-8B58-B47BD415CC8F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
