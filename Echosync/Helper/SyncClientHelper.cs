@@ -152,7 +152,8 @@ namespace Echosync.Helper
                     return;
                 }
 
-                var characterName = "|" + ClientState.LocalPlayer?.Name.TextValue + "@" + ClientState.LocalPlayer?.HomeWorld.Id ?? "TEST";
+                var worldId = ClientState.LocalPlayer?.HomeWorld.Value.Name;
+                var characterName = "|" + ClientState.LocalPlayer?.Name.TextValue + "@" + worldId ?? "TEST";
                 var npcId = !string.IsNullOrWhiteSpace(AddonTalkHelper.ActiveNpcId) ? "|" + AddonTalkHelper.ActiveNpcId : "";
                 dialogue = !string.IsNullOrWhiteSpace(dialogue) ? "|" + dialogue : "";
 

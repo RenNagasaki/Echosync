@@ -18,7 +18,9 @@ namespace Echosync.Helper
                     new()
                     {
                         Listener = (AtkEventListener*)unitBase,
-                        Flags = 132,
+                        State = new AtkEventState() {
+                            StateFlags = AtkEventStateFlags.Completed | AtkEventStateFlags.Unk3,
+                        },
                         Target = &AtkStage.Instance()->AtkEventTarget
                     }
                 };

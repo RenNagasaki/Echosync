@@ -128,6 +128,7 @@ namespace Echosync.Helper
             if (!config.Enabled) return;
             if (condition[ConditionFlag.OccupiedSummoningBell]) return;
             if (!condition[ConditionFlag.OccupiedInQuestEvent] && !condition[ConditionFlag.OccupiedInCutSceneEvent] && !condition[ConditionFlag.OccupiedInEvent]) return;
+            if (!SyncClientHelper.Connected || SyncClientHelper.ConnectedPlayersDialogue < 2) return;
             if (args is not AddonReceiveEventArgs receiveEventArgs) return;
 
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Param: {receiveEventArgs.EventParam} Type: {receiveEventArgs.AtkEventType} B: {receiveEventArgs.AtkEvent}", SyncClientHelper.CurrentEvent);
