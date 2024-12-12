@@ -127,9 +127,9 @@ namespace Echosync_Server.Behaviours
                         npcId = messageSplit[2];
                         dialogue = messageSplit[3];
                         LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{userName}/{clientID}'");
+                        LogHelper.Log(_channelName, $"User '{userName}/{clientID}' is forcing click for itself");
                         if (!UserClick(clientID, userName, npcId, dialogue))
                         {
-                            LogHelper.Log(_channelName, $"User '{userName}/{clientID}' is forcing click for itself");
                             Send($"{(int)SyncMessages.ClickDone}");
                             UsersReadyState[_channelName][npcId][dialogue].Remove(userName);
                             if (UsersReadyState[_channelName][npcId][dialogue].Count == 0)

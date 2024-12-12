@@ -144,7 +144,8 @@ namespace Echosync.Helper
 
                 if (!readySend && joinedDialogue)
                 {
-                    SyncClientHelper.CreateMessage(SyncMessages.Click, ActiveDialogue);
+                    if (!(receiveEventArgs.AtkEventType == (byte)AtkEventType.InputReceived))
+                        SyncClientHelper.CreateMessage(SyncMessages.Click, ActiveDialogue);
                     readySend = true;
                 }
                 if (readySend && joinedDialogue && receiveEventArgs.AtkEventType == (byte)AtkEventType.InputReceived)
