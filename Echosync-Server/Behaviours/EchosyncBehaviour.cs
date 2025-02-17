@@ -7,6 +7,7 @@ using WebSocketSharp.Server;
 using WebSocketSharp;
 using Echosync_Data.Enums;
 using Echosync_Server.Helper;
+using System.Reflection;
 
 namespace Echosync_Server.Behaviours
 {
@@ -24,6 +25,7 @@ namespace Echosync_Server.Behaviours
             try
             {
                 LogHelper.Log("Main", $"Client with guid '{ID}' connected to main service!");
+                Console.Title = $"Channels: {_server.WebSocketServices.Count - 1} | Users: {_server.WebSocketServices.SessionCount} | v.{Assembly.GetEntryAssembly().GetName().Version}";
             }
             catch (Exception ex)
             {
@@ -38,6 +40,7 @@ namespace Echosync_Server.Behaviours
             try
             {
                 LogHelper.Log("Main", $"Client with guid '{ID}' disconnected from main service!");
+                Console.Title = $"Channels: {_server.WebSocketServices.Count - 1} | Users: {_server.WebSocketServices.SessionCount} | v.{Assembly.GetEntryAssembly().GetName().Version}";
             }
             catch (Exception ex)
             {

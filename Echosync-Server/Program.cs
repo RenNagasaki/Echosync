@@ -3,6 +3,7 @@
 using Echosync_Data.Enums;
 using Echosync_Server.Behaviours;
 using Echosync_Server.Helper;
+using System.Reflection;
 using WebSocketSharp.Server;
 
 
@@ -17,6 +18,7 @@ public class Program
         LogHelper.Log("Main", $"Starting main Thread!");
         wssv.AddWebSocketService<EchosyncBehaviour>("/main", () => new EchosyncBehaviour(wssv));
         wssv.Start();
+        Console.Title = $"Channels: {wssv.WebSocketServices.Count - 1} | Users: {wssv.WebSocketServices.SessionCount} | v.{Assembly.GetEntryAssembly().GetName().Version}";
 
         var command = "";
         while (command != "quit")

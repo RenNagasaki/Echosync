@@ -7,6 +7,7 @@ using WebSocketSharp.Server;
 using WebSocketSharp;
 using Echosync_Data.Enums;
 using Echosync_Server.Helper;
+using System.Reflection;
 
 namespace Echosync_Server.Behaviours
 {
@@ -30,6 +31,7 @@ namespace Echosync_Server.Behaviours
             try
             {
                 LogHelper.Log(_channelName, $"Client with guid '{ID}' connected");
+                Console.Title = $"Channels: {_server.WebSocketServices.Count - 1} | Users: {_server.WebSocketServices.SessionCount} | v.{Assembly.GetEntryAssembly().GetName().Version}";
             }
             catch (Exception ex)
             {
@@ -51,6 +53,7 @@ namespace Echosync_Server.Behaviours
                     LogHelper.Log(_channelName, $"Last client disconnected, closing channel!");
                     _server.RemoveWebSocketService($"/{_channelName}");
                 }
+                Console.Title = $"Channels: {_server.WebSocketServices.Count - 1} | Users: {_server.WebSocketServices.SessionCount} | v.{Assembly.GetEntryAssembly().GetName().Version}";
             }
             catch (Exception ex)
             {
