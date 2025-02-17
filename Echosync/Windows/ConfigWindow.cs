@@ -22,12 +22,12 @@ public class ConfigWindow : Window, IDisposable
     private string filterLogsGeneralId = "";
     public static bool UpdateLogGeneralFilter = true;
     private bool resetLogGeneralFilter = true;
-    private List<LogMessage> filteredLogsChat;
-    private string filterLogsChatMethod = "";
-    private string filterLogsChatMessage = "";
-    private string filterLogsChatId = "";
-    public static bool UpdateLogChatFilter = true;
-    private bool resetLogChatFilter = true;
+    private List<LogMessage> filteredLogsSync;
+    private string filterLogsSyncMethod = "";
+    private string filterLogsSyncMessage = "";
+    private string filterLogsSyncId = "";
+    public static bool UpdateLogSyncFilter = true;
+    private bool resetLogSyncFilter = true;
     #endregion
 
     // We give this window a constant ID using ###
@@ -105,30 +105,39 @@ public class ConfigWindow : Window, IDisposable
 
         using (var disabled = ImRaii.Disabled(!enabled))
         {
-            var connectAtStart = this.Configuration.ConnectAtStart;
-            if (ImGui.Checkbox("Connect at start", ref connectAtStart))
+            var onlySpecialNPCs = this.Configuration.OnlySpecialNPCs;
+            if (ImGui.Checkbox("Only special NPCs (Any marker above head)", ref onlySpecialNPCs))
             {
-                this.Configuration.ConnectAtStart = connectAtStart;
+                this.Configuration.OnlySpecialNPCs = onlySpecialNPCs;
                 this.Configuration.Save();
-
-                if (connectAtStart)
-                    SyncClientHelper.Connect();
+            }
+            var waitForNearbyUsers = this.Configuration.WaitForNearbyUsers;
+            if (ImGui.Checkbox("Wait for nearby users after starting an dialogue", ref waitForNearbyUsers))
+            {
+                this.Configuration.WaitForNearbyUsers = waitForNearbyUsers;
+                this.Configuration.Save();
             }
 
             var syncServer = this.Configuration.SyncServer;
-            if (ImGui.InputText($"Sync server##ESBaseUrl", ref syncServer, 80))
+            if (ImGui.InputText($"Sync server##ESserver", ref syncServer, 80))
             {
                 this.Configuration.SyncServer = syncServer;                
                 this.Configuration.Save();
             }
 
             var syncChannel = this.Configuration.SyncChannel;
-            if (ImGui.InputText($"Sync channel##ESBaseUrl", ref syncChannel, 80))
+            if (ImGui.InputText($"Sync channel##ESchannel", ref syncChannel, 80))
             {
                 this.Configuration.SyncChannel = syncChannel;
                 this.Configuration.Save();
             }
-            ImGui.SameLine();
+
+            var syncPassword = this.Configuration.SyncPassword;
+            if (ImGui.InputText($"Sync password##ESchannel", ref syncPassword, 80))
+            {
+                this.Configuration.SyncPassword = syncPassword;
+                this.Configuration.Save();
+            }
             if (SyncClientHelper.Connected)
             {
                 if (ImGui.Button($"Disconnect##ESDisconnect"))
@@ -143,11 +152,15 @@ public class ConfigWindow : Window, IDisposable
                     SyncClientHelper.Connect();
                 }
             }
-
-            if (ImGui.Button($"Test Connection##ESTestConnection"))
+            ImGui.SameLine();
+            var connectAtStart = this.Configuration.ConnectAtStart;
+            if (ImGui.Checkbox("Connect at start", ref connectAtStart))
             {
+                this.Configuration.ConnectAtStart = connectAtStart;
+                this.Configuration.Save();
 
-                SyncClientHelper.Test();
+                if (connectAtStart)
+                    SyncClientHelper.Connect();
             }
         }
     }
@@ -188,39 +201,39 @@ public class ConfigWindow : Window, IDisposable
 
                     ImGui.EndTabItem();
                 }
-                if (ImGui.BeginTabItem("Chat"))
+                if (ImGui.BeginTabItem("Sync"))
                 {
                     if (ImGui.CollapsingHeader("Options:"))
                     {
-                        var showDebugLog = this.Configuration.logConfig.ShowChatDebugLog;
+                        var showDebugLog = this.Configuration.logConfig.ShowSyncDebugLog;
                         if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
                         {
-                            this.Configuration.logConfig.ShowChatDebugLog = showDebugLog;
+                            this.Configuration.logConfig.ShowSyncDebugLog = showDebugLog;
                             this.Configuration.Save();
-                            UpdateLogChatFilter = true;
+                            UpdateLogSyncFilter = true;
                         }
-                        var showErrorLog = this.Configuration.logConfig.ShowChatErrorLog;
+                        var showErrorLog = this.Configuration.logConfig.ShowSyncErrorLog;
                         if (ImGui.Checkbox("Show error logs", ref showErrorLog))
                         {
-                            this.Configuration.logConfig.ShowChatErrorLog = showErrorLog;
+                            this.Configuration.logConfig.ShowSyncErrorLog = showErrorLog;
                             this.Configuration.Save();
-                            UpdateLogChatFilter = true;
+                            UpdateLogSyncFilter = true;
                         }
-                        var showId0 = this.Configuration.logConfig.ShowChatId0;
+                        var showId0 = this.Configuration.logConfig.ShowSyncId0;
                         if (ImGui.Checkbox("Show ID: 0", ref showId0))
                         {
-                            this.Configuration.logConfig.ShowChatId0 = showId0;
+                            this.Configuration.logConfig.ShowSyncId0 = showId0;
                             this.Configuration.Save();
-                            UpdateLogChatFilter = true;
+                            UpdateLogSyncFilter = true;
                         }
-                        var jumpToBottom = this.Configuration.logConfig.ChatJumpToBottom;
+                        var jumpToBottom = this.Configuration.logConfig.SyncJumpToBottom;
                         if (ImGui.Checkbox("Always jump to bottom", ref jumpToBottom))
                         {
-                            this.Configuration.logConfig.ChatJumpToBottom = jumpToBottom;
+                            this.Configuration.logConfig.SyncJumpToBottom = jumpToBottom;
                             this.Configuration.Save();
                         }
                     }
-                    DrawLogTable("Chat", TextSource.Sync, Configuration.logConfig.ChatJumpToBottom, ref filteredLogsChat, ref UpdateLogChatFilter, ref resetLogChatFilter, ref filterLogsChatMethod, ref filterLogsChatMessage, ref filterLogsChatId);
+                    DrawLogTable("Sync", TextSource.Sync, Configuration.logConfig.SyncJumpToBottom, ref filteredLogsSync, ref UpdateLogSyncFilter, ref resetLogSyncFilter, ref filterLogsSyncMethod, ref filterLogsSyncMessage, ref filterLogsSyncId);
 
                     ImGui.EndTabItem();
                 }
@@ -364,7 +377,7 @@ public class ConfigWindow : Window, IDisposable
         }
         if (ImGui.Button($"Join Dialogue##ESJoinDialogue"))
         {
-            SyncClientHelper.CreateMessageFake(SyncMessages.JoinDialogue, AddonTalkHelper.ActiveDialogue);
+            SyncClientHelper.CreateMessageFake(SyncMessages.ClickSuccess, AddonTalkHelper.ActiveDialogue);
         }
         ImGui.SameLine();
         if (ImGui.Button($"Click##ESClick"))

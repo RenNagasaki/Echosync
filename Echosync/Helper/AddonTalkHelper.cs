@@ -15,6 +15,7 @@ using Dalamud.Game.Text.SeStringHandling;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using System.Collections.Generic;
 using System.Numerics;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
 
 namespace Echosync.Helper
 {
@@ -25,14 +26,15 @@ namespace Echosync.Helper
         public static string ActiveNpcId = "";
         public static string ActiveDialogue = "";
         public static Vector2 AddonPos = new Vector2(0, 0);
+        public static float AddonWidth = 0;
         public static float AddonScale = 1f;
         private OnUpdateDelegate updateHandler;
         private readonly ICondition condition;
         private readonly IFramework framework;
         private readonly IAddonLifecycle addonLifecycle;
         private readonly IClientState clientState;
-        private readonly IObjectTable objects;
-        private readonly Configuration config;
+        private readonly IObjectTable objectTable;
+        private readonly Configuration configuration;
         private readonly Plugin plugin;
         public DateTime timeNextVoice = DateTime.Now;
         private bool readySend = false;
@@ -47,8 +49,8 @@ namespace Echosync.Helper
             this.framework = framework;
             this.addonLifecycle = addonLifecycle;
             this.clientState = clientState;
-            this.config = config;
-            objects = objectTable;
+            this.configuration = config;
+            this.objectTable = objectTable;
 
             HookIntoFrameworkUpdate();
         }
@@ -61,14 +63,22 @@ namespace Echosync.Helper
 
         private unsafe void OnPostDraw(AddonEvent type, AddonArgs args)
         {
-            if (!config.Enabled) return;
+            if (!configuration.Enabled) return;
             if (condition[ConditionFlag.OccupiedSummoningBell]) return;
+            if (configuration.OnlySpecialNPCs)
+            {
+                bool isSpecial = ((GameObject*)clientState.LocalPlayer.TargetObject.Address)->NamePlateIconId is not 0;
+
+                if (!isSpecial)
+                    return;
+            }
 
             var addonTalk = (AddonTalk*)args.Addon.ToPointer();
             if (addonTalk != null)
             {
 
                 AddonPos = new Vector2(addonTalk->GetX(), addonTalk->GetY());
+                AddonWidth = addonTalk->GetScaledWidth(false);
                 AddonScale = addonTalk->Scale;
                 var visible = addonTalk->AtkUnitBase.IsVisible;
 
@@ -85,13 +95,12 @@ namespace Echosync.Helper
                             if (target != null)
                             {
                                 ActiveNpcId = target.GameObjectId.ToString();
+                                SyncClientHelper.CurrentEvent = LogHelper.EventId(MethodBase.GetCurrentMethod().Name, Enums.TextSource.Sync);
                                 SyncClientHelper.CreateMessage(SyncMessages.StartNpc);
                             }
                         }
                     }
                     ActiveDialogue = dialogue;
-                    SyncClientHelper.CurrentEvent = LogHelper.EventId(MethodBase.GetCurrentMethod().Name, Enums.TextSource.Sync);
-                    SyncClientHelper.CreateMessage(SyncMessages.JoinDialogue, ActiveDialogue);
                     joinedDialogue = true;
                     if (!plugin.ReadyStateWindow.IsOpen)
                         plugin.ReadyStateWindow.Toggle();
@@ -111,24 +120,33 @@ namespace Echosync.Helper
                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Addon closed", SyncClientHelper.CurrentEvent);
                     SyncClientHelper.CreateMessage(SyncMessages.EndNpc);
                     LogHelper.End(MethodBase.GetCurrentMethod().Name, SyncClientHelper.CurrentEvent);
+                    SyncClientHelper.CurrentEvent = null;
                     readySend = false;
                     SyncClientHelper.AllReady = false;
                     SyncClientHelper.ConnectedPlayersDialogue = 0;
                     SyncClientHelper.ConnectedPlayersReady = 0;
                     ActiveDialogue = "";
                     ActiveNpcId = "";
+                }
+
+                if (!visible)
+                {
                     if (plugin.ReadyStateWindow.IsOpen)
                         plugin.ReadyStateWindow.Toggle();
                 }
+            }
+            else
+            {
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Weird stuff happening", SyncClientHelper.CurrentEvent);
             }
         }
 
         private unsafe void OnPreReceiveEvent(AddonEvent type, AddonArgs args)
         {
-            if (!config.Enabled) return;
+            if (!configuration.Enabled) return;
             if (condition[ConditionFlag.OccupiedSummoningBell]) return;
             if (!condition[ConditionFlag.OccupiedInQuestEvent] && !condition[ConditionFlag.OccupiedInCutSceneEvent] && !condition[ConditionFlag.OccupiedInEvent]) return;
-            if (!SyncClientHelper.Connected || SyncClientHelper.ConnectedPlayersDialogue < 2) return;
+            if (!SyncClientHelper.Connected) return;
             if (args is not AddonReceiveEventArgs receiveEventArgs) return;
 
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Param: {receiveEventArgs.EventParam} Type: {receiveEventArgs.AtkEventType} B: {receiveEventArgs.AtkEvent}", SyncClientHelper.CurrentEvent);
@@ -137,20 +155,42 @@ namespace Echosync.Helper
                 if (allowClick)
                 {
                     allowClick = false;
-                    joinedDialogue = false;
-                    LogHelper.End(MethodBase.GetCurrentMethod().Name, SyncClientHelper.CurrentEvent);
+                    if (configuration.WaitForNearbyUsers)
+                    {
+                        var closePlayers = DalamudHelper.GetClosePlayers(SyncClientHelper.ConnectedPlayers, configuration.MaxPlayerDistance);
+
+                        if (closePlayers > SyncClientHelper.ConnectedPlayersDialogue - 1)
+                        {
+                            receiveEventArgs.AtkEventType = 0;
+                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Waiting for other players to start dialogue", SyncClientHelper.CurrentEvent);
+                        }
+                        else
+                        {
+                            joinedDialogue = false;
+                            SyncClientHelper.CreateMessage(SyncMessages.ClickSuccess);
+                            LogHelper.End(MethodBase.GetCurrentMethod().Name, SyncClientHelper.CurrentEvent);
+                            SyncClientHelper.CurrentEvent = null;
+                        }
+                    }
+                    else
+                    {
+                        joinedDialogue = false;
+                        SyncClientHelper.CreateMessage(SyncMessages.ClickSuccess);
+                        LogHelper.End(MethodBase.GetCurrentMethod().Name, SyncClientHelper.CurrentEvent);
+                        SyncClientHelper.CurrentEvent = null;
+                    }
                     return;
                 }
 
                 if (!readySend && joinedDialogue)
                 {
                     if (!(receiveEventArgs.AtkEventType == (byte)AtkEventType.InputReceived))
-                        SyncClientHelper.CreateMessage(SyncMessages.Click, ActiveDialogue);
+                        SyncClientHelper.CreateMessage(SyncMessages.Click);
                     readySend = true;
                 }
                 if (readySend && joinedDialogue && receiveEventArgs.AtkEventType == (byte)AtkEventType.InputReceived)
                 {
-                    SyncClientHelper.CreateMessage(SyncMessages.ClickForce, ActiveDialogue);
+                    SyncClientHelper.CreateMessage(SyncMessages.ClickForce);
                 }
             }
 

@@ -9,12 +9,16 @@ namespace Echosync_Data.Enums
     public enum SyncMessages
     {
         Test,
+        Authenticate,
+        RequestAuthentication,
         CreateChannel,
+        ConnectedPlayersChannel,
+        ConnectedPlayersNpc,
         ConnectedPlayersDialogue,
         ConnectedPlayersReady,
         StartNpc,
         EndNpc,
-        JoinDialogue,
+        ClickSuccess,
         Click,
         ClickForce,
         ClickWait,

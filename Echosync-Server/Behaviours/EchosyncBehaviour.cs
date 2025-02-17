@@ -61,9 +61,10 @@ namespace Echosync_Server.Behaviours
                 {
                     case SyncMessages.CreateChannel:
                         var channel = messageSplit[1];
+                        var password = messageSplit[2];
                         if (_server.WebSocketServices.Hosts.ToList().Find(p => p.Path == $"/{channel}") == null)
                         {
-                            _server.AddWebSocketService($"/{channel}", () => new EchosyncChannelBehaviour(_server, channel));
+                            _server.AddWebSocketService($"/{channel}", () => new EchosyncChannelBehaviour(_server, channel, password));
                             LogHelper.Log("Main", $"User '{clientID}' created channel '{channel}'");
                         }
                         else

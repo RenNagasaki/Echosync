@@ -7,6 +7,7 @@ using Dalamud.Plugin.Services;
 using Dalamud.Game;
 using Echosync.DataClasses;
 using Echosync.Helper;
+using Dalamud.Interface;
 
 namespace Echosync;
 
@@ -44,11 +45,12 @@ public sealed class Plugin : IDalamudPlugin
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
         ConfigWindow = new ConfigWindow(this);
-        ReadyStateWindow = new ReadyStateWindow(this, dataManager);
+        ReadyStateWindow = new ReadyStateWindow(this, dataManager, pluginInterface, Configuration);
 
         this.addonTalkHelper = new AddonTalkHelper(this, condition, framework, addonLifecycle, clientState, objectTable, Configuration);
         LogHelper.Setup(log, Configuration);
         SyncClientHelper.Setup(Configuration, clientState);
+        DalamudHelper.Setup(objectTable, clientState, framework);
 
         WindowSystem.AddWindow(ConfigWindow);
         WindowSystem.AddWindow(ReadyStateWindow);

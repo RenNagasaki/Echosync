@@ -13,8 +13,8 @@ namespace Echosync.Helper
         private static int NextEventId = 1;
         private static List<LogMessage> GeneralLogs = new List<LogMessage>();
         public static List<LogMessage> GeneralLogsFiltered = new List<LogMessage>();
-        private static List<LogMessage> ChatLogs = new List<LogMessage>();
-        public static List<LogMessage> ChatLogsFiltered = new List<LogMessage>();
+        private static List<LogMessage> SyncLogs = new List<LogMessage>();
+        public static List<LogMessage> SyncLogsFiltered = new List<LogMessage>();
 
         public static void Setup(IPluginLog log, Configuration config)
         {
@@ -73,12 +73,12 @@ namespace Echosync.Helper
                     ConfigWindow.UpdateLogGeneralFilter = true;
                     break;
                 case TextSource.Sync:
-                    ChatLogs.Add(logMessage);
+                    SyncLogs.Add(logMessage);
                     if (logMessage.type == LogType.Info
-                        || logMessage.type == LogType.Debug && Config.logConfig.ShowChatDebugLog
-                        || logMessage.type == LogType.Error && Config.logConfig.ShowChatErrorLog)
-                        ChatLogsFiltered.Add(logMessage);
-                    ConfigWindow.UpdateLogChatFilter = true;
+                        || logMessage.type == LogType.Debug && Config.logConfig.ShowSyncDebugLog
+                        || logMessage.type == LogType.Error && Config.logConfig.ShowSyncErrorLog)
+                        SyncLogsFiltered.Add(logMessage);
+                    ConfigWindow.UpdateLogSyncFilter = true;
                     break;
             }
         }
@@ -99,11 +99,11 @@ namespace Echosync.Helper
                     showId0 = true;
                     break;
                 case TextSource.Sync:
-                    ChatLogsFiltered = new List<LogMessage>(ChatLogs);
-                    logListFiltered = ChatLogsFiltered;
-                    showDebug = Config.logConfig.ShowChatDebugLog;
-                    showError = Config.logConfig.ShowChatErrorLog;
-                    showId0 = Config.logConfig.ShowChatId0;
+                    SyncLogsFiltered = new List<LogMessage>(SyncLogs);
+                    logListFiltered = SyncLogsFiltered;
+                    showDebug = Config.logConfig.ShowSyncDebugLog;
+                    showError = Config.logConfig.ShowSyncErrorLog;
+                    showId0 = Config.logConfig.ShowSyncId0;
                     break;
             }
             if (!showDebug)

@@ -14,10 +14,10 @@ namespace Echosync.DataClasses
         public bool GeneralJumpToBottom { get; set; } = true;
         #endregion
         #region Rest
-        public bool ShowChatDebugLog { get; set; } = true;
-        public bool ShowChatErrorLog { get; set; } = true;
-        public bool ShowChatId0 { get; set; } = true;
-        public bool ChatJumpToBottom { get; set; } = true;
+        public bool ShowSyncDebugLog { get; set; } = true;
+        public bool ShowSyncErrorLog { get; set; } = true;
+        public bool ShowSyncId0 { get; set; } = true;
+        public bool SyncJumpToBottom { get; set; } = true;
         #endregion
     }
 }
