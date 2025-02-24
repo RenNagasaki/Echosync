@@ -15,7 +15,7 @@ public class Configuration : IPluginConfiguration
     public bool OnlySpecialNPCs { get; set; } = false;
     public bool WaitForNearbyUsers { get; set; } = false;
     public float MaxPlayerDistance { get; set; } = 10f;
-    public string SyncServer { get; set; } = "wss://echosync.echotools.cloud";
+    public string SyncServer { get; set; } = "wss://sync.echotools.cloud";
     public string SyncChannel { get; set; } = "";
     public string SyncPassword { get; set; } = "";
     public LogConfig logConfig { get; set; } = new LogConfig();
