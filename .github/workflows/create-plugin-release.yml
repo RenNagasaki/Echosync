@@ -41,7 +41,7 @@ jobs:
       run: dotnet restore "Echosync/Echosync.csproj"
       
     - name: Build v${{steps.get_version.outputs.version}}
-      run: dotnet build "Echosync/Echosync.csproj" /p:EnableWindowsTargeting=true --no-restore
+      run: dotnet build "Echosync.csproj" /p:EnableWindowsTargeting=true --no-restore
       
     - name: Test v${{steps.get_version.outputs.version}}
       run: dotnet test --no-build --verbosity normal
