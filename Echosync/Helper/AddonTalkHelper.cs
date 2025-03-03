@@ -19,7 +19,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.Object;
 
 namespace Echosync.Helper
 {
-    public class AddonTalkHelper
+    public unsafe class AddonTalkHelper
     {
         private record struct AddonTalkState(string? Speaker, string? Text);
 
@@ -78,7 +78,7 @@ namespace Echosync.Helper
             {
 
                 AddonPos = new Vector2(addonTalk->GetX(), addonTalk->GetY());
-                AddonWidth = addonTalk->GetScaledWidth(false);
+                AddonWidth = addonTalk->GetScaledWidth(true);
                 AddonScale = addonTalk->Scale;
                 var visible = addonTalk->AtkUnitBase.IsVisible;
 
@@ -141,16 +141,25 @@ namespace Echosync.Helper
             }
         }
 
-        private unsafe void OnPreReceiveEvent(AddonEvent type, AddonArgs args)
+        private void OnPreReceiveEvent(AddonEvent type, AddonArgs args)
         {
             if (!configuration.Enabled) return;
             if (condition[ConditionFlag.OccupiedSummoningBell]) return;
             if (!condition[ConditionFlag.OccupiedInQuestEvent] && !condition[ConditionFlag.OccupiedInCutSceneEvent] && !condition[ConditionFlag.OccupiedInEvent]) return;
             if (!SyncClientHelper.Connected) return;
-            if (args is not AddonReceiveEventArgs receiveEventArgs) return;
+            if (args is not AddonReceiveEventArgs eventArgs)
+                return;
 
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Param: {receiveEventArgs.EventParam} Type: {receiveEventArgs.AtkEventType} B: {receiveEventArgs.AtkEvent}", SyncClientHelper.CurrentEvent);
-            if ((receiveEventArgs.AtkEventType == (byte)AtkEventType.MouseClick || receiveEventArgs.AtkEventType == (byte)AtkEventType.InputReceived) && receiveEventArgs.EventParam == 0 && SyncClientHelper.Connected)
+            var eventData = (AtkEventData*)eventArgs.Data;
+            if (eventData == null)
+                return;
+
+            var eventType = (AtkEventType)eventArgs.AtkEventType;
+            var isControllerButtonClick = eventType == AtkEventType.InputReceived && eventData->InputData.InputId == 1;
+            var isLeftClick = eventType == AtkEventType.MouseClick && ((byte)eventData->MouseData.Modifier & 0b0001_0000) == 0 && !eventData->MouseData.IsRightClick; // not dragging, not right click
+
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Param: {eventArgs.EventParam} Type: {eventArgs.AtkEventType} B: {eventArgs.AtkEvent}", SyncClientHelper.CurrentEvent);
+            if (isControllerButtonClick || isLeftClick)
             {
                 if (allowClick)
                 {
@@ -161,7 +170,7 @@ namespace Echosync.Helper
 
                         if (closePlayers > SyncClientHelper.ConnectedPlayersDialogue - 1)
                         {
-                            receiveEventArgs.AtkEventType = 0;
+                            eventArgs.AtkEventType = 0;
                             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Waiting for other players to start dialogue", SyncClientHelper.CurrentEvent);
                         }
                         else
@@ -184,17 +193,17 @@ namespace Echosync.Helper
 
                 if (!readySend && joinedDialogue)
                 {
-                    if (!(receiveEventArgs.AtkEventType == (byte)AtkEventType.InputReceived))
+                    if (!(eventArgs.AtkEventType == (byte)AtkEventType.InputReceived))
                         SyncClientHelper.CreateMessage(SyncMessages.Click);
                     readySend = true;
                 }
-                if (readySend && joinedDialogue && receiveEventArgs.AtkEventType == (byte)AtkEventType.InputReceived)
+                if (readySend && joinedDialogue && eventArgs.AtkEventType == (byte)AtkEventType.InputReceived)
                 {
                     SyncClientHelper.CreateMessage(SyncMessages.ClickForce);
                 }
             }
 
-            receiveEventArgs.AtkEventType = 0;
+            eventArgs.AtkEventType = 0;
         }
 
         private unsafe string GetTalkAddonText(AddonTalk* addonTalk)

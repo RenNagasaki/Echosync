@@ -73,15 +73,17 @@ public class ReadyStateWindow : Window, IDisposable
         var drawList = ImGui.GetWindowDrawList();
         var iconSize = new Vector2(24, 24) * AddonTalkHelper.AddonScale;
         var iconSizeSmall = new Vector2(20, 20) * AddonTalkHelper.AddonScale;
-        var offsetX = 16 * AddonTalkHelper.AddonScale;
+        var offsetX = 16;
 
         if (SyncClientHelper.ConnectedPlayersDialogue > 0)
         {
             var closePlayers = DalamudHelper.GetClosePlayers(SyncClientHelper.ConnectedPlayers, configuration.MaxPlayerDistance);
-            var xPos = AddonTalkHelper.AddonPos.X + AddonTalkHelper.AddonWidth - ((offsetX + iconSize.X) * (SyncClientHelper.ConnectedPlayers.Count + 1));
+            var xPos = (AddonTalkHelper.AddonPos.X + AddonTalkHelper.AddonWidth) - ((offsetX + iconSize.X) * (SyncClientHelper.ConnectedPlayers.Count + 2));
+            LogHelper.Debug("XPOS", $"{xPos}", new EKEventId(0, TextSource.None));
             for (int i = 1; i <= SyncClientHelper.ConnectedPlayersDialogue; i++)
             {
                 var iconPos = new Vector2(xPos * AddonTalkHelper.AddonScale, AddonTalkHelper.AddonPos.Y + 120 * AddonTalkHelper.AddonScale);
+                LogHelper.Debug("XPOS", $"{iconPos}", new EKEventId(0, TextSource.None));
                 var iconOffset = new Vector2(offsetX * (i - 1), 0) * AddonTalkHelper.AddonScale;
                 iconPos += iconOffset;
                 if (i <= SyncClientHelper.ConnectedPlayersReady)
