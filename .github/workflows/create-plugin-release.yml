@@ -33,7 +33,7 @@ jobs:
       id: package_version
       uses: KageKirin/get-csproj-version@v1.0.0
       with:
-          regex: "(\d+)\.(\d+)\.(\d+)\.(\d+)"
+          regex: "(\\d+)\.(\\d+)\.(\\d+)\.(\\d+)"
           file: "Echosync/Echosync.csproj"
         
     - name: Setup dotnet v${{steps.package_version.outputs.version}}
