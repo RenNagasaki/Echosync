@@ -29,36 +29,35 @@ jobs:
       with:
         args: zip -qq -r "Source Code.zip" Echosync
         
-    - name: Get version
-      id: package_version
-      uses: KageKirin/get-csproj-version@v1.0.0
+    - uses: bbonkr/get-version-action@v1
+      id: get_version
       with:
-          regex: "(\\d+)\\.(\\d+)\\.(\\d+)\\.(\\d+)"
-          file: "Echosync/Echosync.csproj"
+          project: 'Echosync/Echosync.csproj'
+          show_log_message: true
         
-    - name: Setup dotnet v${{steps.package_version.outputs.version}}
+    - name: Setup dotnet v${{steps.get_version.outputs.version}}
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ matrix.dotnet-version }}
         
-    - name: Restore dependencies v${{steps.package_version.outputs.version}}
+    - name: Restore dependencies v${{steps.get_version.outputs.version}}
       run: dotnet restore
       
-    - name: Build v${{steps.package_version.outputs.version}}
+    - name: Build v${{steps.get_version.outputs.version}}
       run: dotnet build /p:EnableWindowsTargeting=true --no-restore
       
-    - name: Test v${{steps.package_version.outputs.version}}
+    - name: Test v${{steps.get_version.outputs.version}}
       run: dotnet test --no-build --verbosity normal
       
-    - name: Publish v${{steps.package_version.outputs.version}}
+    - name: Publish v${{steps.get_version.outputs.version}}
       run: dotnet publish "Echosync/Echosync.csproj" -c Release -o release --nologo
       
-    - name: Zip build v${{steps.package_version.outputs.version}}
+    - name: Zip build v${{steps.get_version.outputs.version}}
       run: zip -r Echosync.zip Echosync/release/
 
     - uses: ncipollo/release-action@v1
       with:
-          tag: ${{steps.package_version.outputs.version}}
-          name: Echosync v${{steps.package_version.outputs.version}}
+          tag: ${{steps.get_version.outputs.version}}
+          name: Echosync v${{steps.get_version.outputs.version}}
           artifacts: "Source Code.zip,Echosync.zip"
           bodyFile: "Echosync/Changelog.md"
