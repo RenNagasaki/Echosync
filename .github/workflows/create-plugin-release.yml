@@ -31,28 +31,52 @@ jobs:
       with:
           project: 'Echosync/Echosync.csproj'
           show_log_message: true
+
+    - name: Determine Dalamud Branch
+      id: branch
+      run: |
+        if [[ -n "${{ github.event.inputs.dalamud_branch }}" ]]; then
+          echo "branch=${{ github.event.inputs.dalamud_branch }}" >> $GITHUB_OUTPUT
+        elif [[ "${{ github.event.ref }}" == "refs/heads/stg" ]] || [[ "${{ github.event.head_commit.message }}" == "[stg]"* ]]; then
+          echo "branch=stg" >> $GITHUB_OUTPUT
+        else
+          echo "branch=master" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Download Dalamud
+      env:
+        DALAMUD_URL: >
+            ${{ fromJson('{
+              "master": "https://goatcorp.github.io/dalamud-distrib/latest.zip",
+              "stg": "https://goatcorp.github.io/dalamud-distrib/stg/latest.zip"
+            }')[steps.branch.outputs.branch] }}
+      run: |
+        curl -o latest.zip ${{ env.DALAMUD_URL }}
+        mkdir -p ~/.xlcore/dalamud/Hooks/dev/
+        unzip latest.zip -d ~/.xlcore/dalamud/Hooks/dev/
         
-    - name: Setup dotnet v${{steps.get_version.outputs.version}}
+    - name: Setup dotnet
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ matrix.dotnet-version }}
         
-    - name: Restore dependencies v${{steps.get_version.outputs.version}}
+    - name: Restore dependencies
       run: dotnet restore "Echosync/Echosync.csproj"
       
-    - name: Build v${{steps.get_version.outputs.version}}
+    - name: Build
       run: dotnet build /p:EnableWindowsTargeting=true --no-restore
       
-    - name: Test v${{steps.get_version.outputs.version}}
+    - name: Test
       run: dotnet test --no-build --verbosity normal
       
-    - name: Publish v${{steps.get_version.outputs.version}}
+    - name: Publish
       run: dotnet publish "Echosync/Echosync.csproj" -c Release -o release --nologo
       
-    - name: Zip build v${{steps.get_version.outputs.version}}
+    - name: Zip it
       run: zip -r Echosync.zip Echosync/release/
 
-    - uses: ncipollo/release-action@v1
+    - name: Create release for v${{steps.get_version.outputs.version}}
+      uses: ncipollo/release-action@v1
       with:
           tag: ${{steps.get_version.outputs.version}}
           name: Echosync v${{steps.get_version.outputs.version}}
