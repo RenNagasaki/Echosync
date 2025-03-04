@@ -3,26 +3,27 @@ using Echosync.DataClasses;
 using Echosync.Enums;
 using System;
 using System.Collections.Generic;
+using Echosync.Windows;
 
 namespace Echosync.Helper
 {
     public static class LogHelper
     {
-        private static IPluginLog Log;
-        private static Configuration Config;
-        private static int NextEventId = 1;
-        private static List<LogMessage> GeneralLogs = new List<LogMessage>();
-        public static List<LogMessage> GeneralLogsFiltered = new List<LogMessage>();
-        private static List<LogMessage> SyncLogs = new List<LogMessage>();
-        public static List<LogMessage> SyncLogsFiltered = new List<LogMessage>();
+        private static IPluginLog? _log;
+        private static Configuration? _configuration;
+        private static int _nextEventId = 1;
+        private static readonly List<LogMessage> GeneralLogs = [];
+        private static readonly List<LogMessage> SyncLogs = [];
+        private static readonly List<LogMessage> GeneralLogsFiltered = [];
+        private static readonly List<LogMessage> SyncLogsFiltered = [];
 
         public static void Setup(IPluginLog log, Configuration config)
         {
-            Log = log;
-            Config = config;
+            _log = log;
+            _configuration = config;
         }
 
-        public static void Start(string method, EKEventId eventId)
+        private static void Start(string method, EKEventId eventId)
         {
             var text = $"---------------------------Start----------------------------------";
 
@@ -39,44 +40,44 @@ namespace Echosync.Helper
         public static void Info(string method, string text, EKEventId eventId)
         {
             text = $"{text}";
-            SortLogEntry(new LogMessage() { type = LogType.Info, eventId = eventId, method = method, message = $"{text}", color = Constants.INFOLOGCOLOR, timeStamp = DateTime.Now });
+            SortLogEntry(new LogMessage() { Type = LogType.Info, EventId = eventId, Method = method, Message = $"{text}", Color = Constants.INFOLOGCOLOR, TimeStamp = DateTime.Now });
 
-            Log.Info($"{method} - {text} - ID: {eventId.Id}");
+            _log!.Info($"{method} - {text} - ID: {eventId.Id}");
         }
 
         public static void Debug(string method, string text, EKEventId eventId)
         {
             text = $"{text}";
-            SortLogEntry(new LogMessage() { type = LogType.Debug, eventId = eventId, method = method, message = $"{text}", color = Constants.DEBUGLOGCOLOR, timeStamp = DateTime.Now });
+            SortLogEntry(new LogMessage() { Type = LogType.Debug, EventId = eventId, Method = method, Message = $"{text}", Color = Constants.DEBUGLOGCOLOR, TimeStamp = DateTime.Now });
 
-            Log.Debug($"{method} - {text} - ID: {eventId.Id}");
+            _log!.Debug($"{method} - {text} - ID: {eventId.Id}");
         }
 
         public static void Error(string method, string text, EKEventId eventId)
         {
             text = $"{text}";
-            SortLogEntry(new LogMessage() { type = LogType.Error, eventId = eventId, method = method, message = $"{text}", color = Constants.ERRORLOGCOLOR, timeStamp = DateTime.Now });
+            SortLogEntry(new LogMessage() { Type = LogType.Error, EventId = eventId, Method = method, Message = $"{text}", Color = Constants.ERRORLOGCOLOR, TimeStamp = DateTime.Now });
 
-            Log.Error($"{method} - {text} - ID: {eventId.Id}");
+            _log!.Error($"{method} - {text} - ID: {eventId.Id}");
         }
 
         private static void SortLogEntry(LogMessage logMessage)
         {
-            switch (logMessage.eventId.textSource)
+            switch (logMessage.EventId.textSource)
             {
                 case TextSource.None:
                     GeneralLogs.Add(logMessage);
-                    if (logMessage.type == LogType.Info
-                        || logMessage.type == LogType.Debug && Config.logConfig.ShowGeneralDebugLog
-                        || logMessage.type == LogType.Error && Config.logConfig.ShowGeneralErrorLog)
+                    if (logMessage.Type == LogType.Info
+                        || logMessage.Type == LogType.Debug && _configuration!.LogConfig!.ShowGeneralDebugLog
+                        || logMessage.Type == LogType.Error && _configuration!.LogConfig!.ShowGeneralErrorLog)
                         GeneralLogsFiltered.Add(logMessage);
                     ConfigWindow.UpdateLogGeneralFilter = true;
                     break;
                 case TextSource.Sync:
                     SyncLogs.Add(logMessage);
-                    if (logMessage.type == LogType.Info
-                        || logMessage.type == LogType.Debug && Config.logConfig.ShowSyncDebugLog
-                        || logMessage.type == LogType.Error && Config.logConfig.ShowSyncErrorLog)
+                    if (logMessage.Type == LogType.Info
+                        || logMessage.Type == LogType.Debug && _configuration!.LogConfig!.ShowSyncDebugLog
+                        || logMessage.Type == LogType.Error && _configuration!.LogConfig!.ShowSyncErrorLog)
                         SyncLogsFiltered.Add(logMessage);
                     ConfigWindow.UpdateLogSyncFilter = true;
                     break;
@@ -85,49 +86,53 @@ namespace Echosync.Helper
 
         public static List<LogMessage> RecreateLogList(TextSource textSource)
         {
-            var logListFiltered = new List<LogMessage>();
-            var showDebug = false;
-            var showError = false;
-            var showId0 = false;
+            List<LogMessage> logListFiltered;
+            bool showDebug;
+            bool showError;
+            bool showId0;
             switch (textSource)
             {
                 case TextSource.None:
-                    GeneralLogsFiltered = new List<LogMessage>(GeneralLogs);
+                    GeneralLogsFiltered.Clear();
+                    GeneralLogs.AddRange(GeneralLogs);
                     logListFiltered = GeneralLogsFiltered;
-                    showDebug = Config.logConfig.ShowGeneralDebugLog;
-                    showError = Config.logConfig.ShowGeneralErrorLog;
+                    showDebug = _configuration!.LogConfig!.ShowGeneralDebugLog;
+                    showError = _configuration.LogConfig.ShowGeneralErrorLog;
                     showId0 = true;
                     break;
                 case TextSource.Sync:
-                    SyncLogsFiltered = new List<LogMessage>(SyncLogs);
+                    SyncLogsFiltered.Clear();
+                    SyncLogsFiltered.AddRange(SyncLogs);
                     logListFiltered = SyncLogsFiltered;
-                    showDebug = Config.logConfig.ShowSyncDebugLog;
-                    showError = Config.logConfig.ShowSyncErrorLog;
-                    showId0 = Config.logConfig.ShowSyncId0;
+                    showDebug = _configuration!.LogConfig!.ShowSyncDebugLog;
+                    showError = _configuration.LogConfig.ShowSyncErrorLog;
+                    showId0 = _configuration.LogConfig.ShowSyncId0;
                     break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(textSource), textSource, null);
             }
             if (!showDebug)
             {
-                logListFiltered.RemoveAll(p => p.type == LogType.Debug);
+                logListFiltered.RemoveAll(p => p.Type == LogType.Debug);
             }
             if (!showError)
             {
-                logListFiltered.RemoveAll(p => p.type == LogType.Error);
+                logListFiltered.RemoveAll(p => p.Type == LogType.Error);
             }
             if (!showId0)
             {
-                logListFiltered.RemoveAll(p => p.eventId.Id == 0);
+                logListFiltered.RemoveAll(p => p.EventId.Id == 0);
             }
 
-            logListFiltered.Sort((p, q) => p.timeStamp.CompareTo(q.timeStamp));
+            logListFiltered.Sort((p, q) => p.TimeStamp.CompareTo(q.TimeStamp));
 
-            return new List<LogMessage>(logListFiltered);
+            return [..logListFiltered];
         }
 
         public static EKEventId EventId(string methodName, TextSource textSource)
         {
-            var eventId = new EKEventId(NextEventId, textSource);
-            NextEventId++;
+            var eventId = new EKEventId(_nextEventId, textSource);
+            _nextEventId++;
 
             LogHelper.Start(methodName, eventId);
             return eventId;

@@ -2,7 +2,7 @@ namespace Echosync_Server.Helper
 {
     public static class LogHelper
     {
-        private static string FileName;
+        private static string _fileName = "";
 
         public static void Log(string channelName, string log, bool error = false)
         {
@@ -12,14 +12,11 @@ namespace Echosync_Server.Helper
             if (!Path.Exists("Logs"))
                 Directory.CreateDirectory("Logs");
 
-            if (string.IsNullOrWhiteSpace(FileName))
-                FileName = $"Logs\\{timeStamp.ToString("yyyy-MM-dd")}_{channelName}.log";
-            File.AppendAllLines(FileName, new string[] { log });
+            if (string.IsNullOrWhiteSpace(_fileName))
+                _fileName = $"Logs\\{timeStamp:yyyy-MM-dd}_{channelName}.log";
+            File.AppendAllLines(_fileName, [log]);
 
-            if (error)
-                Console.ForegroundColor = ConsoleColor.Red;
-            else
-                Console.ForegroundColor = ConsoleColor.White;
+            Console.ForegroundColor = error ? ConsoleColor.Red : ConsoleColor.White;
 
             Console.WriteLine($"{log} - Channel: {channelName}");
         }

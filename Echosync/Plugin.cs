@@ -1,13 +1,11 @@
 using Dalamud.Game.Command;
 using Dalamud.IoC;
 using Dalamud.Plugin;
-using System.IO;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
-using Dalamud.Game;
 using Echosync.DataClasses;
 using Echosync.Helper;
-using Dalamud.Interface;
+using Echosync.Windows;
 
 namespace Echosync;
 
@@ -15,63 +13,57 @@ public sealed class Plugin : IDalamudPlugin
 {
     [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
     [PluginService] internal static ITextureProvider TextureProvider { get; private set; } = null!;
-    [PluginService] internal static ICommandManager CommandManager { get; private set; } = null!;
+    [PluginService] private static ICommandManager CommandManager { get; set; } = null!;
 
     private const string CommandName = "/es";
 
-    public Configuration Configuration { get; init; }
+    public Configuration Configuration { get; }
 
-    public readonly WindowSystem WindowSystem = new("Echosync");
-    private ConfigWindow ConfigWindow { get; init; }
-    internal ReadyStateWindow ReadyStateWindow { get; init; }
-    private AddonTalkHelper addonTalkHelper { get; set; }
+    private readonly WindowSystem _windowSystem = new("Echosync");
+    private ConfigWindow ConfigWindow { get; }
+    internal ReadyStateWindow ReadyStateWindow { get; }
+    private AddonTalkHelper AddonTalkHelper { get; }
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
         IPluginLog log,
-        ICommandManager commandManager,
         IFramework framework,
         IClientState clientState,
         ICondition condition,
         IObjectTable objectTable,
         IDataManager dataManager,
-        IChatGui chatGui,
-        IGameGui gameGui,
-        ISigScanner sigScanner,
-        IGameInteropProvider gameInterop,
-        IGameConfig gameConfig,
         IAddonLifecycle addonLifecycle)
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
         ConfigWindow = new ConfigWindow(this);
-        ReadyStateWindow = new ReadyStateWindow(this, dataManager, pluginInterface, Configuration);
+        ReadyStateWindow = new ReadyStateWindow(dataManager, pluginInterface, Configuration);
 
-        this.addonTalkHelper = new AddonTalkHelper(this, condition, framework, addonLifecycle, clientState, objectTable, Configuration);
+        this.AddonTalkHelper = new AddonTalkHelper(this, condition, framework, addonLifecycle, clientState, Configuration);
         LogHelper.Setup(log, Configuration);
         SyncClientHelper.Setup(Configuration, clientState);
         DalamudHelper.Setup(objectTable, clientState, framework);
 
-        WindowSystem.AddWindow(ConfigWindow);
-        WindowSystem.AddWindow(ReadyStateWindow);
+        _windowSystem.AddWindow(ConfigWindow);
+        _windowSystem.AddWindow(ReadyStateWindow);
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
             HelpMessage = "Opens the config window"
         });
 
-        PluginInterface.UiBuilder.Draw += DrawUI;
+        PluginInterface.UiBuilder.Draw += DrawUi;
 
         // This adds a button to the plugin installer entry of this plugin which allows
         // to toggle the display status of the configuration ui
-        PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUI;
+        PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUi;
     }
 
     public void Dispose()
     {
-        addonTalkHelper.Dispose();
+        AddonTalkHelper.Dispose();
         SyncClientHelper.Dispose();
-        WindowSystem.RemoveAllWindows();
+        _windowSystem.RemoveAllWindows();
         ConfigWindow.Dispose();
         ReadyStateWindow.Dispose();
         CommandManager.RemoveHandler(CommandName);
@@ -80,10 +72,10 @@ public sealed class Plugin : IDalamudPlugin
     private void OnCommand(string command, string args)
     {
         // in response to the slash command, just toggle the display status of our main ui
-        ToggleConfigUI();
+        ToggleConfigUi();
     }
 
-    private void DrawUI() => WindowSystem.Draw();
+    private void DrawUi() => _windowSystem.Draw();
 
-    public void ToggleConfigUI() => ConfigWindow.Toggle();
+    private void ToggleConfigUi() => ConfigWindow.Toggle();
 }

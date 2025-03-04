@@ -8,11 +8,11 @@
         "resolved": "11.0.0",
         "contentHash": "bjT7XUlhIJSmsE/O76b7weUX+evvGQctbQB8aKXt94o+oPWxHpCepxAGMs7Thow3AzCyqWs7cOpp9/2wcgRRQA=="
       },
-      "WebSocketSharp": {
+      "WebSocketSharp.NetCore": {
         "type": "Direct",
-        "requested": "[1.0.3-rc11, )",
-        "resolved": "1.0.3-rc11",
-        "contentHash": "7VCF7f7zVMOvLGD8LeGS4DVXc8lOcB6kXnUMeTxigu+PMiU+6wW5Olq2gYrDU8vDRKOwFY+5RyBaLyzb8skEzA=="
+        "requested": "[1.0.1-alpha.4, )",
+        "resolved": "1.0.1-alpha.4",
+        "contentHash": "qL+tPaCWsmMowz8lc21Jti+Hb8xQmmIT8VgaBZF2o5ieB2YUUN/IC3csraPsbUeUmKWqBg3A/8jwR/MipPN7FA=="
       },
       "echosync-data": {
         "type": "Project"

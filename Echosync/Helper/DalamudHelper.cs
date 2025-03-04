@@ -1,57 +1,41 @@
-using Dalamud.Interface.Textures.TextureWraps;
 using Dalamud.Plugin.Services;
-using Dalamud.Utility;
-using Echosync.DataClasses;
-using FFXIVClientStructs.FFXIV.Client.Game.Object;
-using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using System;
 using System.Collections.Generic;
-using System.Numerics;
+using System.Linq;
+using Dalamud.Game.ClientState.Objects.Types;
+
 namespace Echosync.Helper
 {
     public static class DalamudHelper
     {
-        private static IObjectTable ObjectTable;
-        private static IClientState ClientState;
-        private static IFramework Framework;
+        private static IObjectTable? _objectTable;
+        private static IClientState? _clientState;
+        private static IFramework? _framework;
 
         public static void Setup(IObjectTable objectTable, IClientState clientState, IFramework framework)
         {
-            ObjectTable = objectTable;
-            ClientState = clientState;
-            Framework = framework;
+            _objectTable = objectTable;
+            _clientState = clientState;
+            _framework = framework;
         }
 
         public static int GetClosePlayers(List<uint> connectedUsers, float maxPlayerDistance)
         {
             var result = 0;
-            Framework.RunOnFrameworkThread(() => { result = GetClosePlayersMainThread(connectedUsers, maxPlayerDistance); });
+            _framework!.RunOnFrameworkThread(() => { result = GetClosePlayersMainThread(connectedUsers, maxPlayerDistance); });
 
             return result;
         }
         private static int GetClosePlayersMainThread(List<uint> connectedUsers, float maxPlayerDistance)
         {
-            var closePlayers = 0;
-            foreach (var connectedUser in connectedUsers)
-            {
-                if (!SyncClientHelper.ConnectedPlayersNpc.Contains(connectedUser))
-                {
-                    var playerObject = ObjectTable.SearchByEntityId(connectedUser);
-
-                    if (playerObject != null)
-                    {
-                        var distance = ClientState.LocalPlayer.Position - playerObject.Position;
-                        var combinedDistance = Math.Abs(distance.X) + Math.Abs(distance.Y) + Math.Abs(distance.Z);
-                        if (combinedDistance < maxPlayerDistance)
-                        {
-                            closePlayers++;
-                        }
-                    }
-                }
-            }
-
-            return closePlayers;
+            return (from connectedUser
+                    in connectedUsers
+                    where !SyncClientHelper.ConnectedPlayersNpc.Contains(connectedUser)
+                    select _objectTable!.SearchByEntityId(connectedUser))
+                        .OfType<IGameObject>()
+                            .Select(playerObject => _clientState!.LocalPlayer!.Position - playerObject.Position)
+                                .Select(distance => Math.Abs(distance.X) + Math.Abs(distance.Y) + Math.Abs(distance.Z))
+                                    .Count(combinedDistance => combinedDistance < maxPlayerDistance);
         }
     }
 }

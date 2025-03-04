@@ -6,11 +6,11 @@ namespace Echosync.DataClasses
 {
     public class LogMessage
     {
-        public DateTime timeStamp { get; set; }
-        public string method { get; set; }
-        public string message { get; set; }
-        public Vector4 color { get; set; }
-        public EKEventId eventId { get; set; }
-        public LogType type { get; set; }
+        public required DateTime TimeStamp { get; init; }
+        public required string Method { get; init; }
+        public required string Message { get; init; }
+        public required Vector4 Color { get; init; }
+        public required EKEventId EventId { get; init; }
+        public required LogType Type { get; init; }
     }
 }

@@ -1,25 +1,20 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using WebSocketSharp.Server;
-using WebSocketSharp;
 using Echosync_Data.Enums;
 using Echosync_Server.Helper;
 using System.Reflection;
+using WebSocketSharp.NetCore;
+using WebSocketSharp.NetCore.Server;
 
 namespace Echosync_Server.Behaviours
 {
     public class EchosyncChannelBehaviour : WebSocketBehavior
     {
-        protected static List<UserState> UserStates = new List<UserState>();
-        protected HttpServer _server;
-        protected string _channelName;
-        protected string _password;
-        protected UserState _userState;
+        private static readonly List<UserState> UserStates = [];
+        private UserState? _userState;
+        private HttpServer? _server;
+        private string _channelName = "";
+        private string _password = "";
 
-        public EchosyncChannelBehaviour(HttpServer server, string channelName, string password)
+        public void Setup(HttpServer server, string channelName, string password)
         {
             _server = server;
             _channelName = channelName;
@@ -30,12 +25,12 @@ namespace Echosync_Server.Behaviours
         {
             try
             {
-                LogHelper.Log(_channelName, $"Client with guid '{ID}' connected");
-                Console.Title = $"Channels: {_server.WebSocketServices.Count - 1} | Users: {_server.WebSocketServices.SessionCount} | v.{Assembly.GetEntryAssembly().GetName().Version}";
+                LogHelper.Log(_channelName, $"Client with guid '{Context.UserEndPoint.Address.ToString()}' connected");
+                Console.Title = $"Channels: {_server!.WebSocketServices.Count - 1} | Users: {_server.WebSocketServices.Count} | v.{Assembly.GetEntryAssembly()!.GetName().Version}";
             }
             catch (Exception ex)
             {
-                LogHelper.Log(_channelName, $"Error while client '{ID}' connected: {ex}");
+                LogHelper.Log(_channelName, $"Error while client '{Context.UserEndPoint.Address.ToString()}' connected: {ex}");
             }
 
             base.OnOpen();
@@ -45,19 +40,24 @@ namespace Echosync_Server.Behaviours
         {
             try
             {
-                LogHelper.Log(_channelName, $"Client with guid '{ID}' disconnected!");
-                UserStates.Remove(_userState);
+                LogHelper.Log(_channelName, $"Client with guid '{Context.UserEndPoint.Address.ToString()}' disconnected!");
+
+                if (_userState != null)
+                {
+                    UserStates.Remove(_userState);
+                    SendNpcState(_userState.NpcId, _userState.DialogueCount);
+                }
 
                 if (Sessions.Count == 0)
                 {
                     LogHelper.Log(_channelName, $"Last client disconnected, closing channel!");
-                    _server.RemoveWebSocketService($"/{_channelName}");
+                    _server!.RemoveWebSocketService($"/{_channelName}");
                 }
-                Console.Title = $"Channels: {_server.WebSocketServices.Count - 1} | Users: {_server.WebSocketServices.SessionCount} | v.{Assembly.GetEntryAssembly().GetName().Version}";
+                Console.Title = $"Channels: {_server!.WebSocketServices.Count - 1} | Users: {_server.WebSocketServices.Count} | v.{Assembly.GetEntryAssembly()!.GetName().Version}";
             }
             catch (Exception ex)
             {
-                LogHelper.Log(_channelName, $"Error while client '{ID}' disconnected: {ex}", true);
+                LogHelper.Log(_channelName, $"Error while client '{Context.UserEndPoint.Address.ToString()}' disconnected: {ex}", true);
             }
 
             base.OnClose(e);
@@ -81,13 +81,13 @@ namespace Echosync_Server.Behaviours
                 {
                     case SyncMessages.Authenticate:
                         var userName = messageSplit[1];
-                        var password = messageSplit[2];
+                        var password1 = messageSplit[2];
                         var networkId = messageSplit[3];
-                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{userName}/{ID}'");
+                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{Context.UserEndPoint.Address.ToString()}'");
 
-                        if (password == _password)
+                        if (password1 == _password)
                         {
-                            LogHelper.Log(_channelName, $"User '{userName}/{ID}' succesfully authenticated");
+                            LogHelper.Log(_channelName, $"User '{Context.UserEndPoint.Address.ToString()}' succesfully authenticated");
                             _userState = new UserState(ID, networkId, Context.UserEndPoint.Address.ToString(), userName, _channelName);
                             UserStates.Add(_userState);
 
@@ -95,20 +95,20 @@ namespace Echosync_Server.Behaviours
                         }
                         else
                         {
-                            LogHelper.Log(_channelName, $"User '{userName}/{ID}' failed to authenticate");
+                            LogHelper.Log(_channelName, $"User '{_userState?.IpAdress ?? Context.UserEndPoint.Address.ToString()}' failed to authenticate");
                             Sessions.CloseSession(ID, CloseStatusCode.PolicyViolation, "Wrong password");
                         }
                         break;
                     case SyncMessages.StartNpc:
                         var npcId = messageSplit[1];
-                        _userState.NpcId = npcId;
+                        _userState!.NpcId = npcId;
                         _userState.DialogueCount = 0;
                         _userState.Ready = false;
-                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{_userState.UserName}/{_userState.WebSocketId}' for npc '{_userState.NpcId}'");
+                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{_userState.IpAdress}' for npc '{_userState.NpcId}'");
                         SendNpcState(_userState.NpcId, _userState.DialogueCount);
                         break;
                     case SyncMessages.EndNpc:
-                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{_userState.UserName}/{_userState.WebSocketId}' for npc '{_userState.NpcId}'");
+                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{_userState!.IpAdress}' for npc '{_userState.NpcId}'");
 
                         npcId = _userState.NpcId;
                         var dialogueCount = _userState.DialogueCount;
@@ -121,7 +121,7 @@ namespace Echosync_Server.Behaviours
                             SendClickDone(npcId, dialogueCount);
                         break;
                     case SyncMessages.ClickSuccess:
-                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{_userState.UserName}/{ID}'");
+                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{_userState!.IpAdress}'");
 
                         _userState.Ready = false;
                         _userState.DialogueCount++;
@@ -129,20 +129,20 @@ namespace Echosync_Server.Behaviours
                         SendNpcState(_userState.NpcId, _userState.DialogueCount);
                         break;
                     case SyncMessages.Click:
-                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{_userState.UserName}/{ID}'");
-                        LogHelper.Log(_channelName, $"User '{_userState.UserName}/{ID}' in channel '{_userState.Channel}' is ready");
+                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{_userState!.IpAdress}'");
+                        LogHelper.Log(_channelName, $"User '{_userState.IpAdress}' in channel '{_userState.Channel}' is ready");
                         UserClick();
                         break;
                     case SyncMessages.ClickForce:
-                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{_userState.UserName}/{ID}'");
-                        LogHelper.Log(_channelName, $"User '{_userState.UserName}/{ID}' is forcing click for itself");
+                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{_userState!.IpAdress}'");
+                        LogHelper.Log(_channelName, $"User '{_userState.IpAdress}' is forcing click for itself");
                         if (!UserClick())
                         {
                             Send($"{(int)SyncMessages.ClickDone}");
                         }
                         break;
                     case SyncMessages.Test:
-                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{_userState.UserName}/{ID}'");
+                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{_userState!.IpAdress}'");
                         Send($"{(int)SyncMessages.Test}");
                         break;
                 }
@@ -150,40 +150,35 @@ namespace Echosync_Server.Behaviours
             }
             catch (Exception ex)
             {
-                LogHelper.Log(_channelName, $"Illegal message from '{_userState.UserName}/{ID}' message: '{message}' Exception: {ex}", true);
+                LogHelper.Log(_channelName, $"Illegal message from '{_userState!.IpAdress}' message: '{message}' Exception: {ex}", true);
             }
         }
 
-        protected void SendNpcState(string npcId, int dialogueCount)
+        private void SendNpcState(string npcId, int dialogueCount)
         {
             LogHelper.Log(_channelName, $"Sending dialogue state from channel: {_channelName} for NPC: {npcId}");
             var npcUsers = UserStates.FindAll(p => p.Channel == _channelName && p.NpcId == npcId);
             var dialogueUsers = npcUsers.FindAll(p => p.DialogueCount == dialogueCount);
-            var dialogueUsersReady = dialogueUsers.FindAll(p => p.Ready);
 
             foreach (var npcUser in npcUsers)
             {
-                IWebSocketSession session;
-                if (Sessions.TryGetSession(npcUser.WebSocketId, out session))
-                {
-                    var networkIds = "";
-                    npcUsers.ForEach(p => {
-                        if (p != npcUser)
-                            networkIds += p.NetworkId + "|";
-                    });
+                if (!Sessions.TryGetSession(npcUser.WebSocketId, out var session)) continue;
+                var networkIds = "";
+                npcUsers.ForEach(p => {
+                    if (p != npcUser)
+                        networkIds += p.NetworkId + "|";
+                });
 
-                    if (!string.IsNullOrWhiteSpace(networkIds))
-                        networkIds = networkIds.Substring(0, networkIds.Length - 1);
+                if (!string.IsNullOrWhiteSpace(networkIds))
+                    networkIds = networkIds[..^1];
 
-                    LogHelper.Log(_channelName, $"Sending connectedplayersnpc for channel: {_channelName} to user: {npcUser.UserName}/{npcUser.WebSocketId}\r\nData: {networkIds}");
-                    session.Context.WebSocket.Send($"{(int)SyncMessages.ConnectedPlayersNpc}|{networkIds}");
-                }
+                LogHelper.Log(_channelName, $"Sending connectedplayersnpc for channel: {_channelName} to user: {npcUser.IpAdress}\r\nData: {networkIds}");
+                session.Context.WebSocket.Send($"{(int)SyncMessages.ConnectedPlayersNpc}|{networkIds}");
             }
 
             foreach (var dialogueUser in dialogueUsers)
             {
-                IWebSocketSession session;
-                if (Sessions.TryGetSession(dialogueUser.WebSocketId, out session))
+                if (Sessions.TryGetSession(dialogueUser.WebSocketId, out var session))
                 {
                     session.Context.WebSocket.Send($"{(int)SyncMessages.ConnectedPlayersDialogue}|{dialogueUsers.Count}");
                     session.Context.WebSocket.Send($"{(int)SyncMessages.ConnectedPlayersReady}|{dialogueUsers.FindAll(p => p.Ready).Count}");
@@ -191,19 +186,18 @@ namespace Echosync_Server.Behaviours
             }
         }
 
-        protected void SendConnectedUsers()
+        private void SendConnectedUsers()
         {
             LogHelper.Log(_channelName, $"Sending all connected and authenticated users for channel: {_channelName}");
             var connectedUsers = UserStates.FindAll(p => p.Channel == _channelName);
             foreach (var connectedUser in connectedUsers)
             {
-                IWebSocketSession session;
-                if (Sessions.TryGetSession(connectedUser.WebSocketId, out session))
+                if (Sessions.TryGetSession(connectedUser.WebSocketId, out var session))
                 {
                     var networkIds = "";
-                    connectedUsers.ForEach(p => { 
+                    connectedUsers.ForEach(p => {
                         if (p != connectedUser)
-                            networkIds += p.NetworkId + "|"; 
+                            networkIds += p.NetworkId + "|";
                     });
 
                     if (!string.IsNullOrWhiteSpace(networkIds))
@@ -214,28 +208,27 @@ namespace Echosync_Server.Behaviours
             }
         }
 
-        protected void SendClickDone(string npcId, int dialogueCount)
+        private void SendClickDone(string npcId, int dialogueCount)
         {
             LogHelper.Log(_channelName, $"All users in channel for npc '{npcId}' are ready sending advance command'");
             var dialogueUsers = UserStates.FindAll(p => p.Channel == _channelName && p.DialogueCount == dialogueCount && p.NpcId == npcId);
             foreach (var dialogueUser in dialogueUsers)
             {
-                IWebSocketSession session;
-                if (Sessions.TryGetSession(dialogueUser.WebSocketId, out session))
+                if (Sessions.TryGetSession(dialogueUser.WebSocketId, out var session))
                     session.Context.WebSocket.Send($"{(int)SyncMessages.ClickDone}");
             }
         }
 
-        protected bool AllReady()
+        private bool AllReady()
         {
-            var usersNotReady = UserStates.FindAll(p => p.Channel == _userState.Channel && p.NpcId == _userState.NpcId && p.DialogueCount == _userState.DialogueCount && !p.Ready);
+            var usersNotReady = UserStates.FindAll(p => p.Channel == _userState!.Channel && p.NpcId == _userState.NpcId && p.DialogueCount == _userState.DialogueCount && !p.Ready);
 
             return usersNotReady.Count == 0;
         }
 
-        protected bool UserClick()
+        private bool UserClick()
         {
-            _userState.Ready = true;
+            _userState!.Ready = true;
             SendNpcState(_userState.NpcId, _userState.DialogueCount);
             var allReady = AllReady();
 
@@ -243,7 +236,7 @@ namespace Echosync_Server.Behaviours
             {
                 if (UserStates.FindAll(p => p.Channel == _userState.Channel && p.NpcId == _userState.NpcId && p.DialogueCount < _userState.DialogueCount).Count > 0)
                 {
-                    LogHelper.Log(_channelName, $"User '{_userState.UserName}/{ID}' is waiting for catchup");
+                    LogHelper.Log(_channelName, $"User '{_userState.IpAdress}' is waiting for catchup");
                     Send($"{(int)SyncMessages.ClickWaitCatchup}");
                     return false;
                 }
@@ -252,7 +245,7 @@ namespace Echosync_Server.Behaviours
             }
             else
             {
-                LogHelper.Log(_channelName, $"User '{_userState.UserName}/{ID}' is waiting for the others");
+                LogHelper.Log(_channelName, $"User '{_userState.IpAdress}' is waiting for the others");
                 Send($"{(int)SyncMessages.ClickWait}");
             }
 

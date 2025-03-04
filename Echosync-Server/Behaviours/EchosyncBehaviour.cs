@@ -1,21 +1,16 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using WebSocketSharp.Server;
-using WebSocketSharp;
 using Echosync_Data.Enums;
 using Echosync_Server.Helper;
 using System.Reflection;
+using WebSocketSharp.NetCore;
+using WebSocketSharp.NetCore.Server;
 
 namespace Echosync_Server.Behaviours
 {
     public class EchosyncBehaviour : WebSocketBehavior
     {
-        private HttpServer _server;
+        private HttpServer? _server;
 
-        public EchosyncBehaviour(HttpServer server)
+        public void Setup(HttpServer server)
         {
             _server = server;
         }
@@ -25,7 +20,7 @@ namespace Echosync_Server.Behaviours
             try
             {
                 LogHelper.Log("Main", $"Client with guid '{ID}' connected to main service!");
-                Console.Title = $"Channels: {_server.WebSocketServices.Count - 1} | Users: {_server.WebSocketServices.SessionCount} | v.{Assembly.GetEntryAssembly().GetName().Version}";
+                Console.Title = $"Channels: {_server!.WebSocketServices.Count - 1} | Users: {_server!.WebSocketServices.Count} | v.{Assembly.GetEntryAssembly()!.GetName().Version}";
             }
             catch (Exception ex)
             {
@@ -40,7 +35,7 @@ namespace Echosync_Server.Behaviours
             try
             {
                 LogHelper.Log("Main", $"Client with guid '{ID}' disconnected from main service!");
-                Console.Title = $"Channels: {_server.WebSocketServices.Count - 1} | Users: {_server.WebSocketServices.SessionCount} | v.{Assembly.GetEntryAssembly().GetName().Version}";
+                Console.Title = $"Channels: {_server!.WebSocketServices.Count - 1} | Users: {_server!.WebSocketServices.Count} | v.{Assembly.GetEntryAssembly()!.GetName().Version}";
             }
             catch (Exception ex)
             {
@@ -65,9 +60,10 @@ namespace Echosync_Server.Behaviours
                     case SyncMessages.CreateChannel:
                         var channel = messageSplit[1];
                         var password = messageSplit[2];
-                        if (_server.WebSocketServices.Hosts.ToList().Find(p => p.Path == $"/{channel}") == null)
+                        if (_server!.WebSocketServices.Hosts.ToList().Find(p => p.Path == $"/{channel}") == null)
                         {
-                            _server.AddWebSocketService($"/{channel}", () => new EchosyncChannelBehaviour(_server, channel, password));
+                            _server.WebSocketServices.AddService<EchosyncChannelBehaviour>($"/{channel}",
+                                (t) => { t.Setup(_server, channel, password); });
                             LogHelper.Log("Main", $"User '{clientID}' created channel '{channel}'");
                         }
                         else

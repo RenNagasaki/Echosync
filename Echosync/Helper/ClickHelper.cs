@@ -8,7 +8,7 @@ namespace Echosync.Helper
     {
         public static void ClickDialogue(nint addon, EKEventId eventId)
         {
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Auto advancing...", eventId);
+            LogHelper.Debug(MethodBase.GetCurrentMethod()!.Name, $"Auto advancing...", eventId);
             var unitBase = (AtkUnitBase*)addon;
 
             if (unitBase != null && AtkStage.Instance() != null)
