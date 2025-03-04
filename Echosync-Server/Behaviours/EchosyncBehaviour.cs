@@ -47,14 +47,13 @@ namespace Echosync_Server.Behaviours
 
         protected override void OnMessage(MessageEventArgs e)
         {
-            var clientID = ID;
             try
             {
                 var message = e.Data;
                 var messageSplit = message.Split('|');
                 var messageEnum = (SyncMessages)Convert.ToInt32(messageSplit[0]);
 
-                LogHelper.Log("Main", $"Message received: '{messageEnum}' from '{clientID}'");
+                LogHelper.Log("Main", $"Message received: '{messageEnum}' from '{Context.UserEndPoint.Address.ToString()}'");
                 switch (messageEnum)
                 {
                     case SyncMessages.CreateChannel:
@@ -64,10 +63,10 @@ namespace Echosync_Server.Behaviours
                         {
                             _server.WebSocketServices.AddService<EchosyncChannelBehaviour>($"/{channel}",
                                 (t) => { t.Setup(_server, channel, password); });
-                            LogHelper.Log("Main", $"User '{clientID}' created channel '{channel}'");
+                            LogHelper.Log("Main", $"User '{Context.UserEndPoint.Address.ToString()}' created channel '{channel}'");
                         }
                         else
-                            LogHelper.Log("Main", $"User '{clientID}' requested existing channel '{channel}'");
+                            LogHelper.Log("Main", $"User '{Context.UserEndPoint.Address.ToString()}' requested existing channel '{channel}'");
                         Send($"{(int)SyncMessages.CreateChannel}");
                         break;
                     case SyncMessages.Test:
@@ -77,7 +76,7 @@ namespace Echosync_Server.Behaviours
             }
             catch (Exception ex)
             {
-                LogHelper.Log("Main", $"Illegal message from '{clientID}': {ex}", true);
+                LogHelper.Log("Main", $"Illegal message from '{Context.UserEndPoint.Address.ToString()}': {ex}", true);
             }
         }
     }
