@@ -41,7 +41,7 @@ public sealed class Plugin : IDalamudPlugin
 
         this.AddonTalkHelper = new AddonTalkHelper(this, condition, framework, addonLifecycle, clientState, Configuration);
         LogHelper.Setup(log, Configuration);
-        SyncClientHelper.Setup(Configuration, clientState);
+        SyncClientHelper.Setup(Configuration, clientState, framework);
         DalamudHelper.Setup(objectTable, clientState, framework);
 
         _windowSystem.AddWindow(ConfigWindow);

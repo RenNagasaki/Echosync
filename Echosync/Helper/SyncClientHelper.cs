@@ -4,7 +4,9 @@ using Echosync.Enums;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using Dalamud.Game.ClientState.Objects.SubKinds;
 using Echosync_Data.Enums;
+using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using WebSocketSharp.NetCore;
 
 namespace Echosync.Helper
@@ -31,11 +33,15 @@ namespace Echosync.Helper
             set => _currentEvent = value;
         }
 
-        public static void Setup(Configuration configuration, IClientState clientState)
+        public static void Setup(Configuration configuration, IClientState clientState, IFramework framework)
         {
             _configuration = configuration;
             _clientState = clientState;
-            _entityId = _clientState.LocalPlayer!.EntityId.ToString();
+            framework.RunOnFrameworkThread(() =>
+            {
+                var localPlayer = _clientState!.LocalPlayer;
+                _entityId = localPlayer!.EntityId.ToString();
+            });
             try
             {
                 if (configuration is { ConnectAtStart: true, Enabled: true })
@@ -152,10 +158,7 @@ namespace Echosync.Helper
                     return;
                 }
 
-                var localPlayer = _clientState!.LocalPlayer;
-                var worldId = localPlayer?.HomeWorld.Value.Name;
-                var characterName = "|" + (localPlayer?.Name.TextValue + "@" + worldId) ?? "TEST";
-                var bodyString = $"{((int)SyncMessages.Authenticate)}{characterName}|{password}|{networkId}";
+                var bodyString = $"{((int)SyncMessages.Authenticate)}{_entityId}|{password}|{networkId}";
                 _webSocket!.Send(bodyString);
                 LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Sent '{SyncMessages.Authenticate.ToString()}' to channel: {_activeChannel}", CurrentEvent!);
             }
