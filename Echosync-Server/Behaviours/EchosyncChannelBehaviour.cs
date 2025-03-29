@@ -70,6 +70,7 @@ namespace Echosync_Server.Behaviours
             {
                 var messageSplit = message.Split('|');
                 var messageEnum = (SyncMessages)Convert.ToInt32(messageSplit[0]);
+                LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{Context.UserEndPoint.Address.ToString()}'");
 
                 if (messageEnum != SyncMessages.Authenticate && _userState == null)
                 {
@@ -83,7 +84,6 @@ namespace Echosync_Server.Behaviours
                         var userName = messageSplit[1];
                         var password1 = messageSplit[2];
                         var networkId = messageSplit[3];
-                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{Context.UserEndPoint.Address.ToString()}'");
 
                         if (password1 == _password)
                         {
@@ -104,11 +104,11 @@ namespace Echosync_Server.Behaviours
                         _userState!.NpcId = npcId;
                         _userState.DialogueCount = 0;
                         _userState.Ready = false;
-                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{_userState.IpAdress}' for npc '{_userState.NpcId}'");
+                        LogHelper.Log(_channelName, $"Message for npc '{_userState.NpcId}'");
                         SendNpcState(_userState.NpcId, _userState.DialogueCount);
                         break;
                     case SyncMessages.EndNpc:
-                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{_userState!.IpAdress}' for npc '{_userState.NpcId}'");
+                        LogHelper.Log(_channelName, $"Message for npc '{_userState!.NpcId}'");
 
                         npcId = _userState.NpcId;
                         var dialogueCount = _userState.DialogueCount;
@@ -121,28 +121,24 @@ namespace Echosync_Server.Behaviours
                             SendClickDone(npcId, dialogueCount);
                         break;
                     case SyncMessages.ClickSuccess:
-                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{_userState!.IpAdress}'");
 
-                        _userState.Ready = false;
+                        _userState!.Ready = false;
                         _userState.DialogueCount++;
 
                         SendNpcState(_userState.NpcId, _userState.DialogueCount);
                         break;
                     case SyncMessages.Click:
-                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{_userState!.IpAdress}'");
-                        LogHelper.Log(_channelName, $"User '{_userState.IpAdress}' in channel '{_userState.Channel}' is ready");
+                        LogHelper.Log(_channelName, $"User '{_userState!.IpAdress}' in channel '{_userState.Channel}' is ready");
                         UserClick();
                         break;
                     case SyncMessages.ClickForce:
-                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{_userState!.IpAdress}'");
-                        LogHelper.Log(_channelName, $"User '{_userState.IpAdress}' is forcing click for itself");
+                        LogHelper.Log(_channelName, $"User '{_userState!.IpAdress}' is forcing click for itself");
                         if (!UserClick())
                         {
                             Send($"{(int)SyncMessages.ClickDone}");
                         }
                         break;
                     case SyncMessages.Test:
-                        LogHelper.Log(_channelName, $"Message received: '{messageEnum}' from '{_userState!.IpAdress}'");
                         Send($"{(int)SyncMessages.Test}");
                         break;
                 }

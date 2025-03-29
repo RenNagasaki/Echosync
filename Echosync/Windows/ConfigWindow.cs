@@ -106,63 +106,68 @@ public class ConfigWindow : Window, IDisposable
             _configuration.Save();
         }
 
-        using var disabled = ImRaii.Disabled(!enabled);
-        var onlySpecialNpCs = _configuration.OnlySpecialNpcs;
-        if (ImGui.Checkbox("Only special NPCs (Any marker above head)", ref onlySpecialNpCs))
+        using (ImRaii.Disabled(!enabled))
         {
-            _configuration.OnlySpecialNpcs = onlySpecialNpCs;
-            _configuration.Save();
-        }
-        var waitForNearbyUsers = _configuration.WaitForNearbyUsers;
-        if (ImGui.Checkbox("Wait for nearby users after starting an dialogue", ref waitForNearbyUsers))
-        {
-            this._configuration.WaitForNearbyUsers = waitForNearbyUsers;
-            this._configuration.Save();
-        }
-
-        var syncServer = this._configuration.SyncServer;
-        if (ImGui.InputText($"Sync server##ESserver", ref syncServer, 80))
-        {
-            this._configuration.SyncServer = syncServer;
-            this._configuration.Save();
-        }
-
-        var syncChannel = this._configuration.SyncChannel;
-        if (ImGui.InputText($"Sync channel##ESchannel", ref syncChannel, 80))
-        {
-            this._configuration.SyncChannel = syncChannel;
-            this._configuration.Save();
-        }
-
-        var syncPassword = this._configuration.SyncPassword;
-        if (ImGui.InputText($"Sync password##ESchannel", ref syncPassword, 80))
-        {
-            this._configuration.SyncPassword = syncPassword;
-            this._configuration.Save();
-        }
-        if (SyncClientHelper.Connected)
-        {
-            if (ImGui.Button($"Disconnect##ESDisconnect"))
+            var onlySpecialNpCs = _configuration.OnlySpecialNpcs;
+            if (ImGui.Checkbox("Only special NPCs (Any marker above head)", ref onlySpecialNpCs))
             {
-                SyncClientHelper.Disconnect();
+                _configuration.OnlySpecialNpcs = onlySpecialNpCs;
+                _configuration.Save();
             }
-        }
-        else
-        {
-            if (ImGui.Button($"Connect##ESConnect"))
-            {
-                SyncClientHelper.Connect();
-            }
-        }
-        ImGui.SameLine();
-        var connectAtStart = this._configuration.ConnectAtStart;
-        if (ImGui.Checkbox("Connect at start", ref connectAtStart))
-        {
-            this._configuration.ConnectAtStart = connectAtStart;
-            this._configuration.Save();
 
-            if (connectAtStart)
-                SyncClientHelper.Connect();
+            var waitForNearbyUsers = _configuration.WaitForNearbyUsers;
+            if (ImGui.Checkbox("Wait for nearby users after starting an dialogue", ref waitForNearbyUsers))
+            {
+                this._configuration.WaitForNearbyUsers = waitForNearbyUsers;
+                this._configuration.Save();
+            }
+
+            var syncServer = this._configuration.SyncServer;
+            if (ImGui.InputText($"Sync server##ESserver", ref syncServer, 80))
+            {
+                this._configuration.SyncServer = syncServer;
+                this._configuration.Save();
+            }
+
+            var syncChannel = this._configuration.SyncChannel;
+            if (ImGui.InputText($"Sync channel##ESchannel", ref syncChannel, 80))
+            {
+                this._configuration.SyncChannel = syncChannel;
+                this._configuration.Save();
+            }
+
+            var syncPassword = this._configuration.SyncPassword;
+            if (ImGui.InputText($"Sync password##ESchannel", ref syncPassword, 80))
+            {
+                this._configuration.SyncPassword = syncPassword;
+                this._configuration.Save();
+            }
+
+            if (SyncClientHelper.Connected)
+            {
+                if (ImGui.Button($"Disconnect##ESDisconnect"))
+                {
+                    SyncClientHelper.Disconnect();
+                }
+            }
+            else
+            {
+                if (ImGui.Button($"Connect##ESConnect"))
+                {
+                    SyncClientHelper.Connect();
+                }
+            }
+
+            ImGui.SameLine();
+            var connectAtStart = this._configuration.ConnectAtStart;
+            if (ImGui.Checkbox("Connect at start", ref connectAtStart))
+            {
+                this._configuration.ConnectAtStart = connectAtStart;
+                this._configuration.Save();
+
+                if (connectAtStart)
+                    SyncClientHelper.Connect();
+            }
         }
     }
     #endregion
