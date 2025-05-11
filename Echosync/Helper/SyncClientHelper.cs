@@ -158,7 +158,7 @@ namespace Echosync.Helper
                     return;
                 }
 
-                var bodyString = $"{((int)SyncMessages.Authenticate)}{_entityId}|{password}|{networkId}";
+                var bodyString = $"{((int)SyncMessages.Authenticate)}|{_entityId}|{password}|{networkId}";
                 _webSocket!.Send(bodyString);
                 LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Sent '{SyncMessages.Authenticate.ToString()}' to channel: {_activeChannel}", CurrentEvent!);
             }

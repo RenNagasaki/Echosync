@@ -82,10 +82,10 @@ namespace Echosync_Server.Behaviours
                 {
                     case SyncMessages.Authenticate:
                         var userName = messageSplit[1];
-                        var password1 = messageSplit[2];
+                        var password = messageSplit[2];
                         var networkId = messageSplit[3];
 
-                        if (password1 == _password)
+                        if (password == _password)
                         {
                             LogHelper.Log(_channelName, $"User '{Context.UserEndPoint.Address.ToString()}' succesfully authenticated");
                             _userState = new UserState(ID, networkId, Context.UserEndPoint.Address.ToString(), userName, _channelName);
