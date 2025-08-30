@@ -6,7 +6,7 @@ Fret no further! Here comes Echosync!!!
 It connect's you and your companions together. Just join a channel and start storying!
 
 ## Dislaimer: 
-* This plugin connects either to my self hosted server (wss://echosync.hogwarts-library.de) or a server hosted by someone else. The character name and home world get logged for security reasons. This will at a later stage be replaced by a real authentication system.
+* This plugin connects either to my self hosted server (wss://sync.echotools.cloud) or a server hosted by someone else. The character name and home world get logged for security reasons. This will at a later stage be replaced by a real authentication system.
 * This plugin is still in it's early stages of development, feel free to report any issues here or on my [![Discord](https://img.shields.io/badge/Join-Discord-blue)](https://discord.gg/5gesjDfDBr) (preferred)
 
 ## Commands
