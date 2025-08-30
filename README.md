@@ -1,9 +1,7 @@
 [![Discord](https://img.shields.io/badge/Join-Discord-blue)](https://discord.gg/5gesjDfDBr)
 
-# Echosync
-Ever wanted to play together with your friend, significant other or free company mates but got annoyed trying to sync the dialogues?
-Fret no further! Here comes Echosync!!!
-It connect's you and your companions together. Just join a channel and start storying!
+# Echosync - Sync the Story, Together
+When dialogue only progresses if your friends do too. Smooth, cozy, and perfect for shared storytelling in FFXIV.
 
 ## Dislaimer: 
 * This plugin connects either to my self hosted server (wss://sync.echotools.cloud) or a server hosted by someone else. I only log the ip addresses connecting to my server, no character/server data.
