@@ -1,7 +1,7 @@
 using System;
 using System.Numerics;
 using Dalamud.Interface.Windowing;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using Echosync.DataClasses;
 using Echosync.Enums;
 using Echosync.Helper;
@@ -77,9 +77,9 @@ public class ReadyStateWindow : Window, IDisposable
                 var iconOffset = new Vector2(offsetX * (i - 1), 0) * AddonTalkHelper.AddonScale;
                 iconPos += iconOffset;
                 if (i <= SyncClientHelper.ConnectedPlayersReady)
-                    drawList.AddImage(ReadyCheckIconTexture!.ImGuiHandle, iconPos, iconPos + iconSize, new Vector2(0.0f, 0.0f), new Vector2(0.5f, 1.0f));
+                    drawList.AddImage(ReadyCheckIconTexture!.Handle, iconPos, iconPos + iconSize, new Vector2(0.0f, 0.0f), new Vector2(0.5f, 1.0f));
                 else
-                    drawList.AddImage(ReadyCheckIconTexture!.ImGuiHandle, iconPos, iconPos + iconSize, new Vector2(0.5f, 0.0f), new Vector2(1.0f));
+                    drawList.AddImage(ReadyCheckIconTexture!.Handle, iconPos, iconPos + iconSize, new Vector2(0.5f, 0.0f), new Vector2(1.0f));
             }
 
             for (int i = SyncClientHelper.ConnectedPlayersDialogue + 1; i <= SyncClientHelper.ConnectedPlayersNpc.Count + 1; i++)
@@ -87,7 +87,7 @@ public class ReadyStateWindow : Window, IDisposable
                 var iconPos = new Vector2(xPos * AddonTalkHelper.AddonScale, AddonTalkHelper.AddonPos.Y + 120 * AddonTalkHelper.AddonScale);
                 var iconOffset = new Vector2(offsetX * (i - 1), 0) * AddonTalkHelper.AddonScale;
                 iconPos += iconOffset;
-                drawList.AddImage(ConfigPadCalibrationXInputIconTexture!.ImGuiHandle, iconPos, iconPos + iconSizeSmall, new Vector2(0.0f, 0.0f), new Vector2(1.0f, 1.0f));
+                drawList.AddImage(ConfigPadCalibrationXInputIconTexture!.Handle, iconPos, iconPos + iconSizeSmall, new Vector2(0.0f, 0.0f), new Vector2(1.0f, 1.0f));
             }
 
             if (_configuration.WaitForNearbyUsers)
@@ -97,7 +97,7 @@ public class ReadyStateWindow : Window, IDisposable
                     var iconPos = new Vector2(xPos * AddonTalkHelper.AddonScale, AddonTalkHelper.AddonPos.Y + 120 * AddonTalkHelper.AddonScale);
                     var iconOffset = new Vector2(offsetX * (SyncClientHelper.ConnectedPlayersNpc.Count + i), 0) * AddonTalkHelper.AddonScale;
                     iconPos += iconOffset;
-                    drawList.AddImage(WindowAButtonIconTexture!.ImGuiHandle, iconPos, iconPos + iconSize, new Vector2(0.0f, 0.0f), new Vector2(1.0f, 1.0f));
+                    drawList.AddImage(WindowAButtonIconTexture!.Handle, iconPos, iconPos + iconSize, new Vector2(0.0f, 0.0f), new Vector2(1.0f, 1.0f));
                 }
             }
         }

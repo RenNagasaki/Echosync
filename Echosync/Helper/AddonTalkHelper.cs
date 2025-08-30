@@ -62,7 +62,7 @@ namespace Echosync.Helper
                     return;
             }
 
-            var addonTalk = (AddonTalk*)args.Addon.ToPointer();
+            var addonTalk = (AddonTalk*)args.Addon.Address.ToPointer();
             if (addonTalk != null)
             {
 
@@ -71,7 +71,7 @@ namespace Echosync.Helper
                 AddonScale = addonTalk->Scale;
                 var visible = IsVisible(addonTalk);
 
-                var dialogue = GetTalkAddonText((AddonTalk*)args.Addon.ToPointer());
+                var dialogue = GetTalkAddonText((AddonTalk*)args.Addon.Address.ToPointer());
                 if (visible && ActiveDialogue != dialogue && SyncClientHelper.Connected)
                 {
                     if (string.IsNullOrWhiteSpace(ActiveNpcId))

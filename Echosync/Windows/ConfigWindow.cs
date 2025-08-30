@@ -3,12 +3,12 @@ using System.Numerics;
 using Dalamud.Interface.Utility.Raii;
 using System.Reflection;
 using Dalamud.Interface.Windowing;
-using ImGuiNET;
 using Echosync.DataClasses;
 using Echosync.Enums;
 using Echosync.Helper;
 using System.Collections.Generic;
 using Echosync_Data.Enums;
+using Dalamud.Bindings.ImGui;
 
 namespace Echosync.Windows;
 
