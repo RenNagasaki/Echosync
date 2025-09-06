@@ -19,8 +19,6 @@ namespace Echosync.Helper
         public static readonly List<uint> ConnectedPlayers = [];
         public static readonly List<uint> ConnectedPlayersNpc = [];
         public static int ConnectedPlayersReady { get; set; }
-        private static Configuration? _configuration;
-        private static IClientState? _clientState;
         private static WebSocket? _webSocket;
         private static string _activeChannel = "";
         private static string _entityId = "";
@@ -33,18 +31,16 @@ namespace Echosync.Helper
             set => _currentEvent = value;
         }
 
-        public static void Setup(Configuration configuration, IClientState clientState, IFramework framework)
+        public static void Setup()
         {
-            _configuration = configuration;
-            _clientState = clientState;
-            framework.RunOnFrameworkThread(() =>
+            Plugin.Framework.RunOnFrameworkThread(() =>
             {
-                var localPlayer = _clientState!.LocalPlayer;
+                var localPlayer = Plugin.ClientState!.LocalPlayer;
                 _entityId = localPlayer!.EntityId.ToString();
             });
             try
             {
-                if (configuration is { ConnectAtStart: true, Enabled: true })
+                if (Plugin.Configuration is { ConnectAtStart: true, Enabled: true })
                 {
                     Connect();
                 }
@@ -59,10 +55,10 @@ namespace Echosync.Helper
         {
             try
             {
-                LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Initializing connection to: {_configuration!.SyncServer + "/" + _syncServerThread}", CurrentEvent!);
+                LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Initializing connection to: {Plugin.Configuration!.SyncServer + "/" + _syncServerThread}", CurrentEvent!);
                 if (_webSocket is { ReadyState: WebSocketState.Open })
                     _webSocket.Close();
-                _webSocket = new WebSocket(_configuration.SyncServer + "/" + _syncServerThread);
+                _webSocket = new WebSocket(Plugin.Configuration.SyncServer + "/" + _syncServerThread);
 
                 if (_syncServerThread == "main")
                 {
@@ -101,9 +97,9 @@ namespace Echosync.Helper
                 InitializeWebSocket();
                 LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Connecting to server", CurrentEvent!);
 
-                _activeChannel = _configuration!.SyncChannel;
+                _activeChannel = Plugin.Configuration!.SyncChannel;
                 _webSocket!.Connect();
-                Authenticate(_configuration.SyncPassword, _entityId);
+                Authenticate(Plugin.Configuration.SyncPassword, _entityId);
             }
             catch (Exception ex)
             {
@@ -251,7 +247,7 @@ namespace Echosync.Helper
         private static void WebSocket_OnOpenMain(object? sender, EventArgs e)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Connected to main server", CurrentEvent!);
-            RequestChannel(SyncMessages.CreateChannel, _activeChannel, _configuration!.SyncPassword);
+            RequestChannel(SyncMessages.CreateChannel, _activeChannel, Plugin.Configuration!.SyncPassword);
         }
 
         private static void WebSocket_OnCloseMain(object? sender, EventArgs e)
@@ -289,7 +285,7 @@ namespace Echosync.Helper
                         break;
                     case SyncMessages.RequestAuthentication:
                         LogHelper.Debug(MethodBase.GetCurrentMethod()!.Name, $"Received message '{messageEnum}' in channel '{_activeChannel}'", CurrentEvent!);
-                        Authenticate(_configuration!.SyncPassword, _entityId);
+                        Authenticate(Plugin.Configuration!.SyncPassword, _entityId);
                         break;
                     case SyncMessages.ClickDone:
                         AllReady = true;

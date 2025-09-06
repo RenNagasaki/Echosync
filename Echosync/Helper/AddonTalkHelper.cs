@@ -22,41 +22,29 @@ namespace Echosync.Helper
         public static Vector2 AddonPos { get; private set; }
         public static float AddonWidth { get; private set; }
         public static float AddonScale { get; private set; } = 1f;
-        private readonly ICondition _condition;
-        private readonly IFramework _framework;
-        private readonly IAddonLifecycle _addonLifecycle;
-        private readonly IClientState _clientState;
-        private readonly Configuration _configuration;
-        private readonly Plugin _plugin;
         private bool _readySend;
         private bool _allowClick;
         private bool _joinedDialogue;
 
-        public AddonTalkHelper(Plugin plugin, ICondition condition, IFramework framework, IAddonLifecycle addonLifecycle, IClientState clientState, Configuration configuration)
+        public AddonTalkHelper()
         {
-            _plugin = plugin;
-            _condition = condition;
-            _framework = framework;
-            _addonLifecycle = addonLifecycle;
-            _clientState = clientState;
-            _configuration = configuration;
 
             HookIntoFrameworkUpdate();
         }
 
         private void HookIntoFrameworkUpdate()
         {
-            _addonLifecycle.RegisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
-            _addonLifecycle.RegisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
+            Plugin.AddonLifecycle.RegisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
+            Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
         }
 
         private void OnPostDraw(AddonEvent type, AddonArgs args)
         {
-            if (!_configuration.Enabled) return;
-            if (_condition[ConditionFlag.OccupiedSummoningBell]) return;
-            if (_configuration.OnlySpecialNpcs)
+            if (!Plugin.Configuration.Enabled) return;
+            if (Plugin.Condition[ConditionFlag.OccupiedSummoningBell]) return;
+            if (Plugin.Configuration.OnlySpecialNpcs)
             {
-                var isSpecial = ((GameObject*)_clientState.LocalPlayer?.TargetObject?.Address)->NamePlateIconId is not 0;
+                var isSpecial = ((GameObject*)Plugin.ClientState.LocalPlayer?.TargetObject?.Address)->NamePlateIconId is not 0;
 
                 if (!isSpecial)
                     return;
@@ -76,7 +64,7 @@ namespace Echosync.Helper
                 {
                     if (string.IsNullOrWhiteSpace(ActiveNpcId))
                     {
-                        var localPlayer = _clientState.LocalPlayer;
+                        var localPlayer = Plugin.ClientState.LocalPlayer;
                         var target = localPlayer?.TargetObject;
 
                         if (target != null)
@@ -88,8 +76,8 @@ namespace Echosync.Helper
                     }
                     ActiveDialogue = dialogue;
                     _joinedDialogue = true;
-                    if (!_plugin.ReadyStateWindow.IsOpen)
-                        _plugin.ReadyStateWindow.Toggle();
+                    if (!Plugin.ReadyStateWindow.IsOpen)
+                        Plugin.ReadyStateWindow.Toggle();
                 }
 
 
@@ -98,7 +86,7 @@ namespace Echosync.Helper
                     SyncClientHelper.AllReady = false;
                     _readySend = false;
                     _allowClick = true;
-                    _framework.RunOnFrameworkThread(() => Click(args.Addon, SyncClientHelper.CurrentEvent!));
+                    Plugin.Framework.RunOnFrameworkThread(() => Click(args.Addon, SyncClientHelper.CurrentEvent!));
                 }
 
                 if (!visible && !string.IsNullOrWhiteSpace(ActiveDialogue) && SyncClientHelper.Connected)
@@ -117,8 +105,8 @@ namespace Echosync.Helper
 
                 if (!visible)
                 {
-                    if (_plugin.ReadyStateWindow.IsOpen)
-                        _plugin.ReadyStateWindow.Toggle();
+                    if (Plugin.ReadyStateWindow.IsOpen)
+                        Plugin.ReadyStateWindow.Toggle();
                 }
             }
             else
@@ -129,9 +117,9 @@ namespace Echosync.Helper
 
         private void OnPreReceiveEvent(AddonEvent type, AddonArgs args)
         {
-            if (!_configuration.Enabled) return;
-            if (_condition[ConditionFlag.OccupiedSummoningBell]) return;
-            if (!_condition[ConditionFlag.OccupiedInQuestEvent] && !_condition[ConditionFlag.OccupiedInCutSceneEvent] && !_condition[ConditionFlag.OccupiedInEvent]) return;
+            if (!Plugin.Configuration.Enabled) return;
+            if (Plugin.Condition[ConditionFlag.OccupiedSummoningBell]) return;
+            if (!Plugin.Condition[ConditionFlag.OccupiedInQuestEvent] && !Plugin.Condition[ConditionFlag.OccupiedInCutSceneEvent] && !Plugin.Condition[ConditionFlag.OccupiedInEvent]) return;
             if (!SyncClientHelper.Connected) return;
             if (args is not AddonReceiveEventArgs eventArgs)
                 return;
@@ -156,9 +144,9 @@ namespace Echosync.Helper
                 if (_allowClick)
                 {
                     _allowClick = false;
-                    if (_configuration.WaitForNearbyUsers)
+                    if (Plugin.Configuration.WaitForNearbyUsers)
                     {
-                        var closePlayers = DalamudHelper.GetClosePlayers(SyncClientHelper.ConnectedPlayers, _configuration.MaxPlayerDistance);
+                        var closePlayers = DalamudHelper.GetClosePlayers(SyncClientHelper.ConnectedPlayers, Plugin.Configuration.MaxPlayerDistance);
 
                         if (closePlayers > SyncClientHelper.ConnectedPlayersDialogue - 1)
                         {
@@ -241,8 +229,8 @@ namespace Echosync.Helper
 
         public void Dispose()
         {
-            _addonLifecycle.UnregisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
-            _addonLifecycle.UnregisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
+            Plugin.AddonLifecycle.UnregisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
+            Plugin.AddonLifecycle.UnregisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
         }
     }
 }

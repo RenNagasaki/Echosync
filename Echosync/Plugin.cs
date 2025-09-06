@@ -14,15 +14,21 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
     [PluginService] internal static ITextureProvider TextureProvider { get; private set; } = null!;
     [PluginService] private static ICommandManager CommandManager { get; set; } = null!;
+    [PluginService] internal static IFramework Framework { get; private set; } = null!;
+    [PluginService] internal static IClientState ClientState { get; private set; } = null!;
+    [PluginService] internal static ICondition Condition { get; private set; } = null!;
+    [PluginService] internal static IObjectTable ObjectTable { get; private set; } = null!;
+    [PluginService] internal static IDataManager DataManager { get; private set; } = null!;
+    [PluginService] internal static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
+    [PluginService] internal static IPluginLog Log { get; private set; } = null!;
+    internal static Configuration Configuration { get; private set; } = null!;
+    internal static ConfigWindow ConfigWindow { get; set; } = null!;
+    internal static ReadyStateWindow ReadyStateWindow { get; set; } = null!;
+    internal static AddonTalkHelper AddonTalkHelper { get; set; } = null!;
 
     private const string CommandName = "/es";
 
-    public Configuration Configuration { get; }
-
     private readonly WindowSystem _windowSystem = new("Echosync");
-    private ConfigWindow ConfigWindow { get; }
-    internal ReadyStateWindow ReadyStateWindow { get; }
-    private AddonTalkHelper AddonTalkHelper { get; }
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
@@ -34,15 +40,20 @@ public sealed class Plugin : IDalamudPlugin
         IDataManager dataManager,
         IAddonLifecycle addonLifecycle)
     {
+        Log = log;
+        Framework = framework;
+        ClientState = clientState;
+        Condition = condition;
+        ObjectTable = objectTable;
+        DataManager = dataManager;
+        AddonLifecycle = addonLifecycle;
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
-        ConfigWindow = new ConfigWindow(this);
-        ReadyStateWindow = new ReadyStateWindow(dataManager, pluginInterface, Configuration);
+        ConfigWindow = new ConfigWindow();
+        ReadyStateWindow = new ReadyStateWindow();
 
-        this.AddonTalkHelper = new AddonTalkHelper(this, condition, framework, addonLifecycle, clientState, Configuration);
-        LogHelper.Setup(log, Configuration);
-        SyncClientHelper.Setup(Configuration, clientState, framework);
-        DalamudHelper.Setup(objectTable, clientState, framework);
+        AddonTalkHelper = new AddonTalkHelper();
+        SyncClientHelper.Setup();
 
         _windowSystem.AddWindow(ConfigWindow);
         _windowSystem.AddWindow(ReadyStateWindow);

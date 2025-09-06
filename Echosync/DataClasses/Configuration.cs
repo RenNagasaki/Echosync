@@ -16,7 +16,7 @@ public class Configuration : IPluginConfiguration
     public string SyncServer { get; set; } = "wss://sync.echotools.cloud";
     public string SyncChannel { get; set; } = "";
     public string SyncPassword { get; set; } = "";
-    public LogConfig? LogConfig { get; set; }
+    public LogConfig? LogConfig { get; set; } = new LogConfig();
 
     // the below exist just to make saving less cumbersome
     public void Save()

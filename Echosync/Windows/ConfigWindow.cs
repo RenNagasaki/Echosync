@@ -14,8 +14,6 @@ namespace Echosync.Windows;
 
 public class ConfigWindow : Window, IDisposable
 {
-    private readonly Configuration _configuration;
-
     #region Logs
 
     private List<LogMessage> _filteredLogsGeneral = [];
@@ -36,13 +34,11 @@ public class ConfigWindow : Window, IDisposable
     // We give this window a constant ID using ###
     // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
     // and the window ID will always be "###XYZ counter window" for ImGui
-    public ConfigWindow(Plugin plugin) : base("Echosync-Configuration")
+    public ConfigWindow() : base("Echosync-Configuration")
     {
         Flags = ImGuiWindowFlags.AlwaysVerticalScrollbar & ImGuiWindowFlags.HorizontalScrollbar & ImGuiWindowFlags.AlwaysHorizontalScrollbar;
         Size = new Vector2(540, 480);
         SizeCondition = ImGuiCond.FirstUseEver;
-
-        _configuration = plugin.Configuration;
     }
 
     public void Dispose() { }
@@ -50,7 +46,7 @@ public class ConfigWindow : Window, IDisposable
     public override void PreDraw()
     {
         // Flags must be added or removed before Draw() is being called, or they won't apply
-        if (_configuration.IsConfigWindowMovable)
+        if (Plugin.Configuration.IsConfigWindowMovable)
         {
             Flags &= ~ImGuiWindowFlags.NoMove;
         }
@@ -99,48 +95,48 @@ public class ConfigWindow : Window, IDisposable
     #region Settings
     private void DrawGeneral()
     {
-        var enabled = this._configuration.Enabled;
+        var enabled = Plugin.Configuration.Enabled;
         if (ImGui.Checkbox("Enabled", ref enabled))
         {
-            _configuration.Enabled = enabled;
-            _configuration.Save();
+            Plugin.Configuration.Enabled = enabled;
+            Plugin.Configuration.Save();
         }
 
         using (ImRaii.Disabled(!enabled))
         {
-            var onlySpecialNpCs = _configuration.OnlySpecialNpcs;
+            var onlySpecialNpCs = Plugin.Configuration.OnlySpecialNpcs;
             if (ImGui.Checkbox("Only special NPCs (Any marker above head)", ref onlySpecialNpCs))
             {
-                _configuration.OnlySpecialNpcs = onlySpecialNpCs;
-                _configuration.Save();
+                Plugin.Configuration.OnlySpecialNpcs = onlySpecialNpCs;
+                Plugin.Configuration.Save();
             }
 
-            var waitForNearbyUsers = _configuration.WaitForNearbyUsers;
+            var waitForNearbyUsers = Plugin.Configuration.WaitForNearbyUsers;
             if (ImGui.Checkbox("Wait for nearby users after starting an dialogue", ref waitForNearbyUsers))
             {
-                this._configuration.WaitForNearbyUsers = waitForNearbyUsers;
-                this._configuration.Save();
+                Plugin.Configuration.WaitForNearbyUsers = waitForNearbyUsers;
+                Plugin.Configuration.Save();
             }
 
-            var syncServer = this._configuration.SyncServer;
+            var syncServer = Plugin.Configuration.SyncServer;
             if (ImGui.InputText($"Sync server##ESserver", ref syncServer, 80))
             {
-                this._configuration.SyncServer = syncServer;
-                this._configuration.Save();
+                Plugin.Configuration.SyncServer = syncServer;
+                Plugin.Configuration.Save();
             }
 
-            var syncChannel = this._configuration.SyncChannel;
+            var syncChannel = Plugin.Configuration.SyncChannel;
             if (ImGui.InputText($"Sync channel##ESchannel", ref syncChannel, 80))
             {
-                this._configuration.SyncChannel = syncChannel;
-                this._configuration.Save();
+                Plugin.Configuration.SyncChannel = syncChannel;
+                Plugin.Configuration.Save();
             }
 
-            var syncPassword = this._configuration.SyncPassword;
+            var syncPassword = Plugin.Configuration.SyncPassword;
             if (ImGui.InputText($"Sync password##ESchannel", ref syncPassword, 80))
             {
-                this._configuration.SyncPassword = syncPassword;
-                this._configuration.Save();
+                Plugin.Configuration.SyncPassword = syncPassword;
+                Plugin.Configuration.Save();
             }
 
             if (SyncClientHelper.Connected)
@@ -159,11 +155,11 @@ public class ConfigWindow : Window, IDisposable
             }
 
             ImGui.SameLine();
-            var connectAtStart = this._configuration.ConnectAtStart;
+            var connectAtStart = Plugin.Configuration.ConnectAtStart;
             if (ImGui.Checkbox("Connect at start", ref connectAtStart))
             {
-                this._configuration.ConnectAtStart = connectAtStart;
-                this._configuration.Save();
+                Plugin.Configuration.ConnectAtStart = connectAtStart;
+                Plugin.Configuration.Save();
 
                 if (connectAtStart)
                     SyncClientHelper.Connect();
@@ -182,28 +178,28 @@ public class ConfigWindow : Window, IDisposable
                 {
                     if (ImGui.CollapsingHeader("Options:"))
                     {
-                        var showDebugLog = this._configuration.LogConfig!.ShowGeneralDebugLog;
+                        var showDebugLog = Plugin.Configuration.LogConfig!.ShowGeneralDebugLog;
                         if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
                         {
-                            this._configuration.LogConfig.ShowGeneralDebugLog = showDebugLog;
-                            this._configuration.Save();
+                            Plugin.Configuration.LogConfig.ShowGeneralDebugLog = showDebugLog;
+                            Plugin.Configuration.Save();
                             UpdateLogGeneralFilter = true;
                         }
-                        var showErrorLog = this._configuration.LogConfig.ShowGeneralErrorLog;
+                        var showErrorLog = Plugin.Configuration.LogConfig.ShowGeneralErrorLog;
                         if (ImGui.Checkbox("Show error logs", ref showErrorLog))
                         {
-                            this._configuration.LogConfig.ShowGeneralErrorLog = showErrorLog;
-                            this._configuration.Save();
+                            Plugin.Configuration.LogConfig.ShowGeneralErrorLog = showErrorLog;
+                            Plugin.Configuration.Save();
                             UpdateLogGeneralFilter = true;
                         }
-                        var jumpToBottom = this._configuration.LogConfig.GeneralJumpToBottom;
+                        var jumpToBottom = Plugin.Configuration.LogConfig.GeneralJumpToBottom;
                         if (ImGui.Checkbox("Always jump to bottom", ref jumpToBottom))
                         {
-                            this._configuration.LogConfig.GeneralJumpToBottom = jumpToBottom;
-                            this._configuration.Save();
+                            Plugin.Configuration.LogConfig.GeneralJumpToBottom = jumpToBottom;
+                            Plugin.Configuration.Save();
                         }
                     }
-                    DrawLogTable("General", TextSource.None, _configuration.LogConfig!.GeneralJumpToBottom, ref _filteredLogsGeneral!, ref UpdateLogGeneralFilter, ref _resetLogGeneralFilter, ref _filterLogsGeneralMethod, ref _filterLogsGeneralMessage, ref _filterLogsGeneralId);
+                    DrawLogTable("General", TextSource.None, Plugin.Configuration.LogConfig!.GeneralJumpToBottom, ref _filteredLogsGeneral!, ref UpdateLogGeneralFilter, ref _resetLogGeneralFilter, ref _filterLogsGeneralMethod, ref _filterLogsGeneralMessage, ref _filterLogsGeneralId);
 
                     ImGui.EndTabItem();
                 }
@@ -211,35 +207,35 @@ public class ConfigWindow : Window, IDisposable
                 {
                     if (ImGui.CollapsingHeader("Options:"))
                     {
-                        var showDebugLog = this._configuration.LogConfig!.ShowSyncDebugLog;
+                        var showDebugLog = Plugin.Configuration.LogConfig!.ShowSyncDebugLog;
                         if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
                         {
-                            this._configuration.LogConfig.ShowSyncDebugLog = showDebugLog;
-                            this._configuration.Save();
+                            Plugin.Configuration.LogConfig.ShowSyncDebugLog = showDebugLog;
+                            Plugin.Configuration.Save();
                             UpdateLogSyncFilter = true;
                         }
-                        var showErrorLog = this._configuration.LogConfig.ShowSyncErrorLog;
+                        var showErrorLog = Plugin.Configuration.LogConfig.ShowSyncErrorLog;
                         if (ImGui.Checkbox("Show error logs", ref showErrorLog))
                         {
-                            this._configuration.LogConfig.ShowSyncErrorLog = showErrorLog;
-                            this._configuration.Save();
+                            Plugin.Configuration.LogConfig.ShowSyncErrorLog = showErrorLog;
+                            Plugin.Configuration.Save();
                             UpdateLogSyncFilter = true;
                         }
-                        var showId0 = this._configuration.LogConfig.ShowSyncId0;
+                        var showId0 = Plugin.Configuration.LogConfig.ShowSyncId0;
                         if (ImGui.Checkbox("Show ID: 0", ref showId0))
                         {
-                            this._configuration.LogConfig.ShowSyncId0 = showId0;
-                            this._configuration.Save();
+                            Plugin.Configuration.LogConfig.ShowSyncId0 = showId0;
+                            Plugin.Configuration.Save();
                             UpdateLogSyncFilter = true;
                         }
-                        var jumpToBottom = this._configuration.LogConfig.SyncJumpToBottom;
+                        var jumpToBottom = Plugin.Configuration.LogConfig.SyncJumpToBottom;
                         if (ImGui.Checkbox("Always jump to bottom", ref jumpToBottom))
                         {
-                            this._configuration.LogConfig.SyncJumpToBottom = jumpToBottom;
-                            this._configuration.Save();
+                            Plugin.Configuration.LogConfig.SyncJumpToBottom = jumpToBottom;
+                            Plugin.Configuration.Save();
                         }
                     }
-                    DrawLogTable("Sync", TextSource.Sync, _configuration.LogConfig!.SyncJumpToBottom, ref _filteredLogsSync!, ref UpdateLogSyncFilter, ref _resetLogSyncFilter, ref _filterLogsSyncMethod, ref _filterLogsSyncMessage, ref _filterLogsSyncId);
+                    DrawLogTable("Sync", TextSource.Sync, Plugin.Configuration.LogConfig!.SyncJumpToBottom, ref _filteredLogsSync!, ref UpdateLogSyncFilter, ref _resetLogSyncFilter, ref _filterLogsSyncMethod, ref _filterLogsSyncMessage, ref _filterLogsSyncId);
 
                     ImGui.EndTabItem();
                 }

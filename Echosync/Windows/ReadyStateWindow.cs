@@ -18,12 +18,11 @@ public class ReadyStateWindow : Window, IDisposable
     private IDalamudTextureWrap? ReadyCheckIconTexture { get; }
     private IDalamudTextureWrap? WindowAButtonIconTexture { get; }
     private IDalamudTextureWrap? ConfigPadCalibrationXInputIconTexture { get; }
-    private readonly Configuration _configuration;
 
     // We give this window a constant ID using ###
     // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
     // and the window ID will always be "###XYZ counter window" for ImGui
-    public ReadyStateWindow(IDataManager dataManager, IDalamudPluginInterface pluginInterface, Configuration configuration) : base("Echosync-ReadyState")
+    public ReadyStateWindow() : base("Echosync-ReadyState")
     {
         Flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoMove |
                 ImGuiWindowFlags.NoMouseInputs | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoBackground |
@@ -34,14 +33,13 @@ public class ReadyStateWindow : Window, IDisposable
             MinimumSize = new Vector2(100, 100),
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue)
         };
-        _configuration = configuration;
         ForceMainWindow = true;
         RespectCloseHotkey = false;
         DisableWindowSounds = true;
-        ReadyCheckIconTexture = Plugin.TextureProvider.CreateFromTexFile(dataManager.GetFile<TexFile>("ui/uld/ReadyCheck_hr1.tex")!);
-        var uldWrapper = pluginInterface.UiBuilder.LoadUld("ui/uld/PartyMemberList.uld");
+        ReadyCheckIconTexture = Plugin.TextureProvider.CreateFromTexFile(Plugin.DataManager.GetFile<TexFile>("ui/uld/ReadyCheck_hr1.tex")!);
+        var uldWrapper = Plugin.PluginInterface.UiBuilder.LoadUld("ui/uld/PartyMemberList.uld");
         WindowAButtonIconTexture = uldWrapper.LoadTexturePart("ui/uld/WindowA_Button.tex", 1);
-        uldWrapper = pluginInterface.UiBuilder.LoadUld("ui/uld/PerformanceGamePadGuide.uld");
+        uldWrapper = Plugin.PluginInterface.UiBuilder.LoadUld("ui/uld/PerformanceGamePadGuide.uld");
         ConfigPadCalibrationXInputIconTexture = uldWrapper.LoadTexturePart("ui/uld/ConfigPadCalibrationXinput.tex", 2);
     }
 
@@ -67,7 +65,7 @@ public class ReadyStateWindow : Window, IDisposable
 
         if (SyncClientHelper.ConnectedPlayersDialogue > 0)
         {
-            var closePlayers = DalamudHelper.GetClosePlayers(SyncClientHelper.ConnectedPlayers, _configuration.MaxPlayerDistance);
+            var closePlayers = DalamudHelper.GetClosePlayers(SyncClientHelper.ConnectedPlayers, Plugin.Configuration.MaxPlayerDistance);
             var xPos = (AddonTalkHelper.AddonPos.X + AddonTalkHelper.AddonWidth) - ((offsetX + iconSize.X) * (SyncClientHelper.ConnectedPlayers.Count + 2));
             LogHelper.Debug("XPOS", $"{xPos}", new EKEventId(0, TextSource.None));
             for (int i = 1; i <= SyncClientHelper.ConnectedPlayersDialogue; i++)
@@ -90,7 +88,7 @@ public class ReadyStateWindow : Window, IDisposable
                 drawList.AddImage(ConfigPadCalibrationXInputIconTexture!.Handle, iconPos, iconPos + iconSizeSmall, new Vector2(0.0f, 0.0f), new Vector2(1.0f, 1.0f));
             }
 
-            if (_configuration.WaitForNearbyUsers)
+            if (Plugin.Configuration.WaitForNearbyUsers)
             {
                 for (int i = 1; i <= closePlayers; i++)
                 {

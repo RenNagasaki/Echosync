@@ -9,19 +9,11 @@ namespace Echosync.Helper
 {
     public static class LogHelper
     {
-        private static IPluginLog? _log;
-        private static Configuration? _configuration;
         private static int _nextEventId = 1;
         private static readonly List<LogMessage> GeneralLogs = [];
         private static readonly List<LogMessage> SyncLogs = [];
         private static readonly List<LogMessage> GeneralLogsFiltered = [];
         private static readonly List<LogMessage> SyncLogsFiltered = [];
-
-        public static void Setup(IPluginLog log, Configuration config)
-        {
-            _log = log;
-            _configuration = config;
-        }
 
         private static void Start(string method, EKEventId eventId)
         {
@@ -42,7 +34,7 @@ namespace Echosync.Helper
             text = $"{text}";
             SortLogEntry(new LogMessage() { Type = LogType.Info, EventId = eventId, Method = method, Message = $"{text}", Color = Constants.INFOLOGCOLOR, TimeStamp = DateTime.Now });
 
-            _log!.Info($"{method} - {text} - ID: {eventId.Id}");
+            Plugin.Log!.Info($"{method} - {text} - ID: {eventId.Id}");
         }
 
         public static void Debug(string method, string text, EKEventId eventId)
@@ -50,7 +42,7 @@ namespace Echosync.Helper
             text = $"{text}";
             SortLogEntry(new LogMessage() { Type = LogType.Debug, EventId = eventId, Method = method, Message = $"{text}", Color = Constants.DEBUGLOGCOLOR, TimeStamp = DateTime.Now });
 
-            _log!.Debug($"{method} - {text} - ID: {eventId.Id}");
+            Plugin.Log!.Debug($"{method} - {text} - ID: {eventId.Id}");
         }
 
         public static void Error(string method, string text, EKEventId eventId)
@@ -58,7 +50,7 @@ namespace Echosync.Helper
             text = $"{text}";
             SortLogEntry(new LogMessage() { Type = LogType.Error, EventId = eventId, Method = method, Message = $"{text}", Color = Constants.ERRORLOGCOLOR, TimeStamp = DateTime.Now });
 
-            _log!.Error($"{method} - {text} - ID: {eventId.Id}");
+            Plugin.Log!.Error($"{method} - {text} - ID: {eventId.Id}");
         }
 
         private static void SortLogEntry(LogMessage logMessage)
@@ -68,16 +60,16 @@ namespace Echosync.Helper
                 case TextSource.None:
                     GeneralLogs.Add(logMessage);
                     if (logMessage.Type == LogType.Info
-                        || logMessage.Type == LogType.Debug && _configuration!.LogConfig!.ShowGeneralDebugLog
-                        || logMessage.Type == LogType.Error && _configuration!.LogConfig!.ShowGeneralErrorLog)
+                        || logMessage.Type == LogType.Debug && Plugin.Configuration!.LogConfig!.ShowGeneralDebugLog
+                        || logMessage.Type == LogType.Error && Plugin.Configuration!.LogConfig!.ShowGeneralErrorLog)
                         GeneralLogsFiltered.Add(logMessage);
                     ConfigWindow.UpdateLogGeneralFilter = true;
                     break;
                 case TextSource.Sync:
                     SyncLogs.Add(logMessage);
                     if (logMessage.Type == LogType.Info
-                        || logMessage.Type == LogType.Debug && _configuration!.LogConfig!.ShowSyncDebugLog
-                        || logMessage.Type == LogType.Error && _configuration!.LogConfig!.ShowSyncErrorLog)
+                        || logMessage.Type == LogType.Debug && Plugin.Configuration!.LogConfig!.ShowSyncDebugLog
+                        || logMessage.Type == LogType.Error && Plugin.Configuration!.LogConfig!.ShowSyncErrorLog)
                         SyncLogsFiltered.Add(logMessage);
                     ConfigWindow.UpdateLogSyncFilter = true;
                     break;
@@ -96,17 +88,17 @@ namespace Echosync.Helper
                     GeneralLogsFiltered.Clear();
                     GeneralLogs.AddRange(GeneralLogs);
                     logListFiltered = GeneralLogsFiltered;
-                    showDebug = _configuration!.LogConfig!.ShowGeneralDebugLog;
-                    showError = _configuration.LogConfig.ShowGeneralErrorLog;
+                    showDebug = Plugin.Configuration!.LogConfig!.ShowGeneralDebugLog;
+                    showError = Plugin.Configuration.LogConfig.ShowGeneralErrorLog;
                     showId0 = true;
                     break;
                 case TextSource.Sync:
                     SyncLogsFiltered.Clear();
                     SyncLogsFiltered.AddRange(SyncLogs);
                     logListFiltered = SyncLogsFiltered;
-                    showDebug = _configuration!.LogConfig!.ShowSyncDebugLog;
-                    showError = _configuration.LogConfig.ShowSyncErrorLog;
-                    showId0 = _configuration.LogConfig.ShowSyncId0;
+                    showDebug = Plugin.Configuration!.LogConfig!.ShowSyncDebugLog;
+                    showError = Plugin.Configuration.LogConfig.ShowSyncErrorLog;
+                    showId0 = Plugin.Configuration.LogConfig.ShowSyncId0;
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(textSource), textSource, null);
