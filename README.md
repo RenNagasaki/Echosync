@@ -4,7 +4,7 @@
 When dialogue only progresses if your friends do too. Smooth, cozy, and perfect for shared storytelling in FFXIV.
 
 ## Dislaimer: 
-* This plugin connects either to my self hosted server (wss://sync.echotools.cloud) or a server hosted by someone else. I only log the ip addresses connecting to my server, no character/server data.
+* This plugin connects either to my self hosted server (wss://sync.echotools.cloud) or a server hosted by someone else (find the server executable under releases, prefix "server"). I only log the ip addresses connecting to my server, no character/server data.
 * This plugin is still in it's early stages of development, feel free to report any issues here or on my [![Discord](https://img.shields.io/badge/Join-Discord-blue)](https://discord.gg/5gesjDfDBr) (preferred)
 
 ## Commands
