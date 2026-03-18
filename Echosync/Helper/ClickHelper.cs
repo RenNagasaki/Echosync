@@ -1,33 +1,33 @@
+using Echotools.Logging.DataClasses;
+using Echotools.Logging.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using Echosync.DataClasses;
-using System.Reflection;
 
-namespace Echosync.Helper
+namespace Echosync.Helper;
+
+public static unsafe class ClickHelper
 {
-    public unsafe static class ClickHelper
+    public static void ClickDialogue(nint addon, EKEventId eventId, ILogService log)
     {
-        public static void ClickDialogue(nint addon, EKEventId eventId)
+        log.Debug(nameof(ClickDialogue), "Auto advancing...", eventId);
+        var unitBase = (AtkUnitBase*)addon;
+
+        if (unitBase != null && AtkStage.Instance() != null)
         {
-            LogHelper.Debug(MethodBase.GetCurrentMethod()!.Name, $"Auto advancing...", eventId);
-            var unitBase = (AtkUnitBase*)addon;
-
-            if (unitBase != null && AtkStage.Instance() != null)
+            var evt = stackalloc AtkEvent[1]
             {
-                var evt = stackalloc AtkEvent[1]
+                new()
                 {
-                    new()
+                    Listener = (AtkEventListener*)unitBase,
+                    State = new AtkEventState
                     {
-                        Listener = (AtkEventListener*)unitBase,
-                        State = new AtkEventState() {
-                            StateFlags = AtkEventStateFlags.Pooled | AtkEventStateFlags.Unk3,
-                        },
-                        Target = &AtkStage.Instance()->AtkEventTarget
-                    }
-                };
-                var data = stackalloc AtkEventData[1];
+                        StateFlags = AtkEventStateFlags.Pooled | AtkEventStateFlags.Unk3,
+                    },
+                    Target = &AtkStage.Instance()->AtkEventTarget
+                }
+            };
+            var data = stackalloc AtkEventData[1];
 
-                unitBase->ReceiveEvent(AtkEventType.MouseClick, 0, evt, data);
-            }
+            unitBase->ReceiveEvent(AtkEventType.MouseClick, 0, evt, data);
         }
     }
 }

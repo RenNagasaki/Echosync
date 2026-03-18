@@ -1,92 +1,97 @@
+using System.Reflection;
 using Dalamud.Game.Command;
-using Dalamud.IoC;
 using Dalamud.Plugin;
-using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
 using Echosync.DataClasses;
 using Echosync.Helper;
+using Echosync.Localization;
 using Echosync.Windows;
+using Echosync.Windows.Native;
+using Echotools.Logging.Services;
+using KamiToolKit;
 
 namespace Echosync;
 
 public sealed class Plugin : IDalamudPlugin
 {
-    [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
-    [PluginService] internal static ITextureProvider TextureProvider { get; private set; } = null!;
-    [PluginService] private static ICommandManager CommandManager { get; set; } = null!;
-    [PluginService] internal static IFramework Framework { get; private set; } = null!;
-    [PluginService] internal static IClientState ClientState { get; private set; } = null!;
-    [PluginService] internal static ICondition Condition { get; private set; } = null!;
-    [PluginService] internal static IObjectTable ObjectTable { get; private set; } = null!;
-    [PluginService] internal static IDataManager DataManager { get; private set; } = null!;
-    [PluginService] internal static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
-    [PluginService] internal static IPluginLog Log { get; private set; } = null!;
-    internal static Configuration Configuration { get; private set; } = null!;
-    internal static ConfigWindow ConfigWindow { get; set; } = null!;
-    internal static ReadyStateWindow ReadyStateWindow { get; set; } = null!;
-    internal static AddonTalkHelper AddonTalkHelper { get; set; } = null!;
+    public static readonly string PluginVersion = $"v{Assembly.GetExecutingAssembly().GetName().Version!.ToString(3)}";
 
     private const string CommandName = "/es";
 
-    private readonly WindowSystem _windowSystem = new("Echosync");
+    private readonly ICommandManager _commandManager;
+    private readonly IDalamudPluginInterface _pluginInterface;
+    private readonly ConfigWindow _configWindow;
+    private readonly ReadyStateWindow _readyStateWindow;
+    private readonly NativeConfigWindow _nativeConfigWindow;
+    private readonly ReadyStateTalkController _readyStateTalkController;
+    private readonly AddonTalkHelper _addonTalkHelper;
+    private readonly SyncClientHelper _syncClient;
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
         IPluginLog log,
         IFramework framework,
-        IClientState clientState,
         ICondition condition,
         IObjectTable objectTable,
         IDataManager dataManager,
-        IAddonLifecycle addonLifecycle)
+        IAddonLifecycle addonLifecycle,
+        ICommandManager commandManager,
+        ITextureProvider textureProvider,
+        IClientState clientState)
     {
-        Log = log;
-        Framework = framework;
-        ClientState = clientState;
-        Condition = condition;
-        ObjectTable = objectTable;
-        DataManager = dataManager;
-        AddonLifecycle = addonLifecycle;
-        Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
+        _pluginInterface = pluginInterface;
+        _commandManager = commandManager;
 
-        ConfigWindow = new ConfigWindow();
-        ReadyStateWindow = new ReadyStateWindow();
+        KamiToolKitLibrary.Initialize(pluginInterface, $"Echosync {PluginVersion}");
 
-        AddonTalkHelper = new AddonTalkHelper();
-        SyncClientHelper.Setup();
+        var configuration = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
+        configuration.Initialize(pluginInterface);
 
-        _windowSystem.AddWindow(ConfigWindow);
-        _windowSystem.AddWindow(ReadyStateWindow);
+        Loc.Initialize(clientState.ClientLanguage);
 
-        CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
+        var logService = new LogService(log);
+        _syncClient = new SyncClientHelper(framework, objectTable, configuration, logService);
+
+        _addonTalkHelper = new AddonTalkHelper(
+            addonLifecycle, objectTable, condition, framework, configuration,
+            _syncClient, logService);
+
+        // Native UI (active)
+        _nativeConfigWindow = new NativeConfigWindow(configuration, _syncClient, logService);
+        _readyStateTalkController = new ReadyStateTalkController(configuration, _syncClient);
+
+        // Legacy ImGui windows (kept but not wired to draw)
+        _readyStateWindow = new ReadyStateWindow(
+            pluginInterface, textureProvider, dataManager, configuration,
+            _syncClient, _addonTalkHelper, logService);
+
+        _configWindow = new ConfigWindow(configuration, _syncClient, logService);
+
+        _commandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
             HelpMessage = "Opens the config window"
         });
 
-        PluginInterface.UiBuilder.Draw += DrawUi;
+        _pluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUi;
+        _pluginInterface.UiBuilder.OpenMainUi += ToggleConfigUi;
 
-        // This adds a button to the plugin installer entry of this plugin which allows
-        // to toggle the display status of the configuration ui
-        PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUi;
+        _syncClient.Setup();
     }
 
     public void Dispose()
     {
-        AddonTalkHelper.Dispose();
-        SyncClientHelper.Dispose();
-        _windowSystem.RemoveAllWindows();
-        ConfigWindow.Dispose();
-        ReadyStateWindow.Dispose();
-        CommandManager.RemoveHandler(CommandName);
+        _pluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
+        _pluginInterface.UiBuilder.OpenMainUi -= ToggleConfigUi;
+        _addonTalkHelper.Dispose();
+        _syncClient.Dispose();
+        _readyStateTalkController.Dispose();
+        _configWindow.Dispose();
+        _readyStateWindow.Dispose();
+        _commandManager.RemoveHandler(CommandName);
+        KamiToolKitLibrary.Cleanup();
     }
 
-    private void OnCommand(string command, string args)
-    {
-        // in response to the slash command, just toggle the display status of our main ui
-        ToggleConfigUi();
-    }
+    private void OnCommand(string command, string args) => ToggleConfigUi();
 
-    private void DrawUi() => _windowSystem.Draw();
-
-    private void ToggleConfigUi() => ConfigWindow.Toggle();
+    private void ToggleConfigUi() => _nativeConfigWindow.Toggle();
 }

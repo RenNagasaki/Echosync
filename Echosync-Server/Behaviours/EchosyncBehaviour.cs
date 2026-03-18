@@ -1,83 +1,91 @@
-using Echosync_Data.Enums;
-using Echosync_Server.Helper;
+using System.Collections.Concurrent;
 using System.Reflection;
+using Echosync.Data.Enums;
+using Echosync.Server.Helper;
 using WebSocketSharp.NetCore;
 using WebSocketSharp.NetCore.Server;
 
-namespace Echosync_Server.Behaviours
+namespace Echosync.Server.Behaviours;
+
+public class EchosyncBehaviour : WebSocketBehavior
 {
-    public class EchosyncBehaviour : WebSocketBehavior
+    private HttpServer? _server;
+    public static readonly ConcurrentDictionary<string, ChannelState> ChannelStates = new();
+
+    public void Setup(HttpServer server) => _server = server;
+
+    protected override void OnOpen()
     {
-        private HttpServer? _server;
-
-        public void Setup(HttpServer server)
+        try
         {
-            _server = server;
+            LogHelper.Log("Main", $"Client with guid '{ID}' connected to main service!");
+            UpdateTitle();
+        }
+        catch (Exception ex)
+        {
+            LogHelper.Log("Main", $"Error while client '{ID}' connected to main service: {ex}", true);
         }
 
-        protected override void OnOpen()
-        {
-            try
-            {
-                LogHelper.Log("Main", $"Client with guid '{ID}' connected to main service!");
-                Console.Title = $"Channels: {_server!.WebSocketServices.Count - 1} | Users: {_server!.WebSocketServices.Count} | v.{Assembly.GetEntryAssembly()!.GetName().Version}";
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Log("Main", $"Error while client '{ID}' connected to main service: {ex}", true);
-            }
+        base.OnOpen();
+    }
 
-            base.OnOpen();
+    protected override void OnClose(CloseEventArgs e)
+    {
+        try
+        {
+            LogHelper.Log("Main", $"Client with guid '{ID}' disconnected from main service!");
+            UpdateTitle();
+        }
+        catch (Exception ex)
+        {
+            LogHelper.Log("Main", $"Error while client '{ID}' disconnected from main service: {ex}", true);
         }
 
-        protected override void OnClose(CloseEventArgs e)
+        base.OnClose(e);
+    }
+
+    protected override void OnMessage(MessageEventArgs e)
+    {
+        try
         {
-            try
-            {
-                LogHelper.Log("Main", $"Client with guid '{ID}' disconnected from main service!");
-                Console.Title = $"Channels: {_server!.WebSocketServices.Count - 1} | Users: {_server!.WebSocketServices.Count} | v.{Assembly.GetEntryAssembly()!.GetName().Version}";
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Log("Main", $"Error while client '{ID}' disconnected from main service: {ex}", true);
-            }
+            var messageSplit = e.Data.Split('|');
+            var messageEnum = (SyncMessages)Convert.ToInt32(messageSplit[0]);
 
-            base.OnClose(e);
-        }
+            LogHelper.Log("Main", $"Message received: '{messageEnum}' from '{Context.UserEndPoint.Address}'");
 
-        protected override void OnMessage(MessageEventArgs e)
-        {
-            try
+            switch (messageEnum)
             {
-                var message = e.Data;
-                var messageSplit = message.Split('|');
-                var messageEnum = (SyncMessages)Convert.ToInt32(messageSplit[0]);
+                case SyncMessages.CreateChannel:
+                    var channel = messageSplit[1];
+                    var password = messageSplit[2];
 
-                LogHelper.Log("Main", $"Message received: '{messageEnum}' from '{Context.UserEndPoint.Address.ToString()}'");
-                switch (messageEnum)
-                {
-                    case SyncMessages.CreateChannel:
-                        var channel = messageSplit[1];
-                        var password = messageSplit[2];
-                        if (_server!.WebSocketServices.Hosts.ToList().Find(p => p.Path == $"/{channel}") == null)
-                        {
-                            _server.WebSocketServices.AddService<EchosyncChannelBehaviour>($"/{channel}",
-                                (t) => { t.Setup(_server, channel, password); });
-                            LogHelper.Log("Main", $"User '{Context.UserEndPoint.Address.ToString()}' created channel '{channel}'");
-                        }
-                        else
-                            LogHelper.Log("Main", $"User '{Context.UserEndPoint.Address.ToString()}' requested existing channel '{channel}'");
-                        Send($"{(int)SyncMessages.CreateChannel}");
-                        break;
-                    case SyncMessages.Test:
-                        break;
-                }
+                    if (_server!.WebSocketServices.Hosts.All(p => p.Path != $"/{channel}"))
+                    {
+                        var channelState = ChannelStates.GetOrAdd(channel, _ => new ChannelState());
+                        _server.WebSocketServices.AddService<EchosyncChannelBehaviour>(
+                            $"/{channel}", t => t.Setup(_server, channel, password, channelState));
+                        LogHelper.Log("Main", $"User '{Context.UserEndPoint.Address}' created channel '{channel}'");
+                    }
+                    else
+                    {
+                        LogHelper.Log("Main", $"User '{Context.UserEndPoint.Address}' requested existing channel '{channel}'");
+                    }
 
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Log("Main", $"Illegal message from '{Context.UserEndPoint.Address.ToString()}': {ex}", true);
+                    Send($"{(int)SyncMessages.CreateChannel}");
+                    break;
+
+                case SyncMessages.Test:
+                    break;
             }
         }
+        catch (Exception ex)
+        {
+            LogHelper.Log("Main", $"Illegal message from '{Context.UserEndPoint.Address}': {ex}", true);
+        }
+    }
+
+    private void UpdateTitle()
+    {
+        Console.Title = $"Channels: {_server!.WebSocketServices.Count - 1} | Users: {_server.WebSocketServices.Count} | v.{Assembly.GetEntryAssembly()!.GetName().Version}";
     }
 }

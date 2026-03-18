@@ -1,236 +1,201 @@
 using System;
-using Dalamud.Plugin.Services;
-using FFXIVClientStructs.FFXIV.Client.UI;
+using System.Numerics;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using FFXIVClientStructs.FFXIV.Component.GUI;
-using Echosync.DataClasses;
-using System.Reflection;
-using Echosync_Data.Enums;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Text.SeStringHandling;
-using System.Numerics;
+using Dalamud.Plugin.Services;
+using Echosync.DataClasses;
+using Echotools.Logging.DataClasses;
+using Echotools.Logging.Enums;
+using Echotools.Logging.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
+using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 
-namespace Echosync.Helper
+namespace Echosync.Helper;
+
+public unsafe class AddonTalkHelper : IDisposable
 {
-    public unsafe class AddonTalkHelper
+    private readonly IAddonLifecycle _addonLifecycle;
+    private readonly IObjectTable _objectTable;
+    private readonly ICondition _condition;
+    private readonly IFramework _framework;
+    private readonly Configuration _configuration;
+    private readonly SyncClientHelper _syncClient;
+    private readonly ILogService _log;
+    public Action<bool>? OnDialogueVisibilityChanged { get; set; }
+
+    public string ActiveNpcId { get; private set; } = "";
+    public string? ActiveDialogue { get; private set; } = "";
+    public Vector2 AddonPos { get; private set; }
+    public float AddonWidth { get; private set; }
+    public float AddonScale { get; private set; } = 1f;
+
+    private bool _pendingClick;
+    private nint _pendingClickAddon;
+    private bool _allowNextClick;
+
+    public AddonTalkHelper(
+        IAddonLifecycle addonLifecycle,
+        IObjectTable objectTable,
+        ICondition condition,
+        IFramework framework,
+        Configuration configuration,
+        SyncClientHelper syncClient,
+        ILogService log)
     {
+        _addonLifecycle = addonLifecycle;
+        _objectTable = objectTable;
+        _condition = condition;
+        _framework = framework;
+        _configuration = configuration;
+        _syncClient = syncClient;
+        _log = log;
 
-        public static string ActiveNpcId { get; private set; } = "";
-        public static string? ActiveDialogue { get; private set; } = "";
-        public static Vector2 AddonPos { get; private set; }
-        public static float AddonWidth { get; private set; }
-        public static float AddonScale { get; private set; } = 1f;
-        private bool _readySend;
-        private bool _allowClick;
-        private bool _joinedDialogue;
+        _addonLifecycle.RegisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
+        _addonLifecycle.RegisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
+    }
 
-        public AddonTalkHelper()
+    private void OnPostDraw(AddonEvent type, AddonArgs args)
+    {
+        // Execute deferred click from previous frame (must not click during PostDraw)
+        if (_pendingClick)
         {
-
-            HookIntoFrameworkUpdate();
+            _pendingClick = false;
+            _allowNextClick = true;
+            ClickHelper.ClickDialogue(_pendingClickAddon, _syncClient.CurrentEvent!, _log);
+            return;
         }
 
-        private void HookIntoFrameworkUpdate()
+        if (!_configuration.Enabled) return;
+        if (_condition[ConditionFlag.OccupiedSummoningBell]) return;
+        if (_configuration.OnlySpecialNpcs)
         {
-            Plugin.AddonLifecycle.RegisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
-            Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
+            var targetAddress = _objectTable.LocalPlayer?.TargetObject?.Address ?? 0;
+            if (targetAddress == 0) return;
+            var isSpecial = ((GameObject*)targetAddress)->NamePlateIconId is not 0;
+            if (!isSpecial) return;
         }
 
-        private void OnPostDraw(AddonEvent type, AddonArgs args)
+        var addonTalk = (AddonTalk*)args.Addon.Address.ToPointer();
+        if (addonTalk == null)
         {
-            if (!Plugin.Configuration.Enabled) return;
-            if (Plugin.Condition[ConditionFlag.OccupiedSummoningBell]) return;
-            if (Plugin.Configuration.OnlySpecialNpcs)
+            _log.Info(nameof(OnPostDraw), "Weird stuff happening", _syncClient.CurrentEvent!);
+            return;
+        }
+
+        AddonPos = new Vector2(addonTalk->GetX(), addonTalk->GetY());
+        AddonWidth = addonTalk->GetScaledWidth(true);
+        AddonScale = addonTalk->Scale;
+        var visible = addonTalk->AtkUnitBase.IsVisible;
+
+        var dialogue = GetTalkText(addonTalk);
+        if (visible && ActiveDialogue != dialogue && _syncClient.Connected)
+        {
+            var dialogueHash = SyncClientHelper.HashDialogueText(dialogue);
+
+            if (string.IsNullOrWhiteSpace(ActiveNpcId))
             {
-                var isSpecial = ((GameObject*)Plugin.ClientState.LocalPlayer?.TargetObject?.Address)->NamePlateIconId is not 0;
-
-                if (!isSpecial)
-                    return;
-            }
-
-            var addonTalk = (AddonTalk*)args.Addon.Address.ToPointer();
-            if (addonTalk != null)
-            {
-
-                AddonPos = new Vector2(addonTalk->GetX(), addonTalk->GetY());
-                AddonWidth = addonTalk->GetScaledWidth(true);
-                AddonScale = addonTalk->Scale;
-                var visible = IsVisible(addonTalk);
-
-                var dialogue = GetTalkAddonText((AddonTalk*)args.Addon.Address.ToPointer());
-                if (visible && ActiveDialogue != dialogue && SyncClientHelper.Connected)
+                var target = _objectTable.LocalPlayer?.TargetObject;
+                if (target != null)
                 {
-                    if (string.IsNullOrWhiteSpace(ActiveNpcId))
-                    {
-                        var localPlayer = Plugin.ClientState.LocalPlayer;
-                        var target = localPlayer?.TargetObject;
-
-                        if (target != null)
-                        {
-                            ActiveNpcId = target.GameObjectId.ToString();
-                            SyncClientHelper.CurrentEvent = LogHelper.EventId(MethodBase.GetCurrentMethod()!.Name, Enums.TextSource.Sync);
-                            SyncClientHelper.CreateMessage(SyncMessages.StartNpc);
-                        }
-                    }
-                    ActiveDialogue = dialogue;
-                    _joinedDialogue = true;
-                    if (!Plugin.ReadyStateWindow.IsOpen)
-                        Plugin.ReadyStateWindow.Toggle();
-                }
-
-
-                if (SyncClientHelper.AllReady && SyncClientHelper.Connected)
-                {
-                    SyncClientHelper.AllReady = false;
-                    _readySend = false;
-                    _allowClick = true;
-                    Plugin.Framework.RunOnFrameworkThread(() => Click(args.Addon, SyncClientHelper.CurrentEvent!));
-                }
-
-                if (!visible && !string.IsNullOrWhiteSpace(ActiveDialogue) && SyncClientHelper.Connected)
-                {
-                    LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Addon closed", SyncClientHelper.CurrentEvent!);
-                    SyncClientHelper.CreateMessage(SyncMessages.EndNpc);
-                    LogHelper.End(MethodBase.GetCurrentMethod()!.Name, SyncClientHelper.CurrentEvent!);
-                    SyncClientHelper.CurrentEvent = null;
-                    _readySend = false;
-                    SyncClientHelper.AllReady = false;
-                    SyncClientHelper.ConnectedPlayersDialogue = 0;
-                    SyncClientHelper.ConnectedPlayersReady = 0;
-                    ActiveDialogue = "";
-                    ActiveNpcId = "";
-                }
-
-                if (!visible)
-                {
-                    if (Plugin.ReadyStateWindow.IsOpen)
-                        Plugin.ReadyStateWindow.Toggle();
+                    ActiveNpcId = target.GameObjectId.ToString();
+                    _syncClient.CurrentEvent = _log.Start(nameof(OnPostDraw), TextSource.Sync);
+                    _syncClient.SendDialogueEnter(ActiveNpcId, dialogueHash);
+                    _syncClient.DialogueState = ClientDialogueState.InDialogue;
                 }
             }
             else
             {
-                LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Weird stuff happening", SyncClientHelper.CurrentEvent!);
+                // Dialogue text changed — send updated hash
+                _syncClient.SendDialogueEnter(ActiveNpcId, dialogueHash);
             }
+
+            ActiveDialogue = dialogue;
+            OnDialogueVisibilityChanged?.Invoke(true);
         }
 
-        private void OnPreReceiveEvent(AddonEvent type, AddonArgs args)
+        // Server granted advance — defer click to next frame to avoid re-entrant crash
+        if (_syncClient.AdvanceGranted && _syncClient.Connected)
         {
-            if (!Plugin.Configuration.Enabled) return;
-            if (Plugin.Condition[ConditionFlag.OccupiedSummoningBell]) return;
-            if (!Plugin.Condition[ConditionFlag.OccupiedInQuestEvent] && !Plugin.Condition[ConditionFlag.OccupiedInCutSceneEvent] && !Plugin.Condition[ConditionFlag.OccupiedInEvent]) return;
-            if (!SyncClientHelper.Connected) return;
-            if (args is not AddonReceiveEventArgs eventArgs)
-                return;
+            _syncClient.AdvanceGranted = false;
+            _syncClient.DialogueState = ClientDialogueState.InDialogue;
+            _pendingClick = true;
+            _pendingClickAddon = args.Addon;
+        }
 
-            var eventData = (AtkEventData*)eventArgs.Data;
-            if (eventData == null)
-                return;
+        if (!visible && !string.IsNullOrWhiteSpace(ActiveDialogue) && _syncClient.Connected)
+        {
+            _log.Info(nameof(OnPostDraw), "Addon closed", _syncClient.CurrentEvent!);
+            _syncClient.SendDialogueExit();
+            _log.End(nameof(OnPostDraw), _syncClient.CurrentEvent!);
+            _syncClient.CurrentEvent = null;
+            ActiveDialogue = "";
+            ActiveNpcId = "";
+        }
 
-            var eventType = (AtkEventType)eventArgs.AtkEventType;
-            var isControllerButtonClick = eventType == AtkEventType.InputReceived && eventData->InputData.InputId == 1;
-            var isDialogueAdvancing = 
-                (eventType == AtkEventType.MouseClick && ((byte)eventData->MouseData.Modifier & 0b0001_0000) == 0) || 
-                eventArgs.AtkEventType == (byte)AtkEventType.InputReceived;
+        if (!visible)
+            OnDialogueVisibilityChanged?.Invoke(false);
+    }
 
-            LogHelper.Info(
-                MethodBase.GetCurrentMethod()!.Name, 
-                $"Param: {eventArgs.EventParam} Type: {eventArgs.AtkEventType} B: {eventArgs.AtkEvent}", 
-                SyncClientHelper.CurrentEvent!);
-            
-            if (isControllerButtonClick || isDialogueAdvancing)
+    private void OnPreReceiveEvent(AddonEvent type, AddonArgs args)
+    {
+        if (!_configuration.Enabled) return;
+        if (_condition[ConditionFlag.OccupiedSummoningBell]) return;
+        if (!_condition[ConditionFlag.OccupiedInQuestEvent] && !_condition[ConditionFlag.OccupiedInCutSceneEvent] && !_condition[ConditionFlag.OccupiedInEvent]) return;
+        if (!_syncClient.Connected) return;
+        if (args is not AddonReceiveEventArgs eventArgs) return;
+
+        var eventData = (AtkEventData*)eventArgs.AtkEventData;
+        if (eventData == null) return;
+
+        var eventType = (AtkEventType)eventArgs.AtkEventType;
+        var isControllerButtonClick = eventType == AtkEventType.InputReceived && eventData->InputData.InputId == 1;
+        var isDialogueAdvancing =
+            (eventType == AtkEventType.MouseClick && ((byte)eventData->MouseData.Modifier & 0b0001_0000) == 0) ||
+            eventArgs.AtkEventType == (byte)AtkEventType.InputReceived;
+
+        _log.Info(nameof(OnPreReceiveEvent), $"Param: {eventArgs.EventParam} Type: {eventArgs.AtkEventType} B: {eventArgs.AtkEvent}", _syncClient.CurrentEvent!);
+
+        if (isControllerButtonClick || isDialogueAdvancing)
+        {
+            // Allow programmatic click from server grant through
+            if (_allowNextClick)
             {
-                if (_allowClick)
-                {
-                    _allowClick = false;
-                    if (Plugin.Configuration.WaitForNearbyUsers)
-                    {
-                        var closePlayers = DalamudHelper.GetClosePlayers(SyncClientHelper.ConnectedPlayers, Plugin.Configuration.MaxPlayerDistance);
-
-                        if (closePlayers > SyncClientHelper.ConnectedPlayersDialogue - 1)
-                        {
-                            eventArgs.AtkEventType = 0;
-                            LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Waiting for other players to start dialogue", SyncClientHelper.CurrentEvent!);
-                        }
-                        else
-                        {
-                            _joinedDialogue = false;
-                            SyncClientHelper.CreateMessage(SyncMessages.ClickSuccess);
-                            LogHelper.End(MethodBase.GetCurrentMethod()!.Name, SyncClientHelper.CurrentEvent!);
-                            SyncClientHelper.CurrentEvent = null;
-                        }
-                    }
-                    else
-                    {
-                        _joinedDialogue = false;
-                        SyncClientHelper.CreateMessage(SyncMessages.ClickSuccess);
-                        LogHelper.End(MethodBase.GetCurrentMethod()!.Name, SyncClientHelper.CurrentEvent!);
-                        SyncClientHelper.CurrentEvent = null;
-                    }
-                    return;
-                }
-
-                if (!_readySend && _joinedDialogue)
-                {
-                    if (eventArgs.AtkEventType != (byte)AtkEventType.InputReceived)
-                        SyncClientHelper.CreateMessage(SyncMessages.Click);
-                    _readySend = true;
-                }
-                if (_readySend && _joinedDialogue && eventArgs.AtkEventType == (byte)AtkEventType.InputReceived)
-                {
-                    SyncClientHelper.CreateMessage(SyncMessages.ClickForce);
-                }
+                _allowNextClick = false;
+                return;
             }
 
-            eventArgs.AtkEventType = 0;
+            // Block and send advance request to server
+            if (_syncClient.DialogueState != ClientDialogueState.AwaitingGrant)
+            {
+                var dialogueHash = SyncClientHelper.HashDialogueText(ActiveDialogue);
+                _syncClient.SendDialogueAdvance(dialogueHash);
+                _log.Info(nameof(OnPreReceiveEvent), "Sent advance request, awaiting server grant", _syncClient.CurrentEvent!);
+            }
         }
 
-        private static string? GetTalkAddonText(AddonTalk* addonTalk)
-        {
-            return ReadText(addonTalk);
-        }
+        // Block all non-granted clicks — server will grant via S2C_AdvanceGranted
+        eventArgs.AtkEventType = 0;
+    }
 
-        private static string? ReadText(AddonTalk* addonTalk)
-        {
-            return addonTalk is null ? null : ReadTalkAddon(addonTalk);
-        }
-        private static string? ReadTalkAddon(AddonTalk* talkAddon)
-        {
-            return talkAddon is null ? null : ReadTextNode(talkAddon!->AtkTextNode228!);
-        }
+    private static string? GetTalkText(AddonTalk* addonTalk)
+    {
+        if (addonTalk == null) return null;
+        var textNode = addonTalk->AtkTextNode228;
+        if (textNode == null) return "";
 
-        private static string ReadTextNode(AtkTextNode* textNode)
-        {
-            if (textNode == null) return "";
+        var textLength = textNode->NodeText.BufUsed - 1;
+        if (textLength is <= 0 or > int.MaxValue) return "";
 
-            var textPtr = textNode->NodeText.StringPtr;
-            var textLength = textNode->NodeText.BufUsed - 1; // Null-terminated; chop off the null byte
-            if (textLength is <= 0 or > int.MaxValue) return "";
+        var seString = SeString.Parse(textNode->NodeText.StringPtr, Convert.ToInt32(textLength));
+        return seString.TextValue.Trim().Replace("\n", "").Replace("\r", "");
+    }
 
-            var textLengthInt = Convert.ToInt32(textLength);
-
-            var seString = SeString.Parse(textPtr, textLengthInt);
-            return seString.TextValue
-                .Trim()
-                .Replace("\n", "")
-                .Replace("\r", "");
-        }
-
-        private static bool IsVisible(AddonTalk* addonTalk)
-        {
-            return addonTalk != null && addonTalk->AtkUnitBase.IsVisible;
-        }
-
-        private static void Click(nint addonTalk, EKEventId eventId)
-        {
-            ClickHelper.ClickDialogue(addonTalk, eventId);
-        }
-
-        public void Dispose()
-        {
-            Plugin.AddonLifecycle.UnregisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
-            Plugin.AddonLifecycle.UnregisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
-        }
+    public void Dispose()
+    {
+        _addonLifecycle.UnregisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
+        _addonLifecycle.UnregisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
     }
 }

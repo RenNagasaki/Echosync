@@ -1,82 +1,83 @@
 using System;
 using System.Numerics;
-using Dalamud.Interface.Utility.Raii;
-using System.Reflection;
-using Dalamud.Interface.Windowing;
-using Echosync.DataClasses;
-using Echosync.Enums;
-using Echosync.Helper;
 using System.Collections.Generic;
-using Echosync_Data.Enums;
+using Dalamud.Interface.Utility.Raii;
+using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
+using Echosync.DataClasses;
+using Echotools.Logging.DataClasses;
+using Echotools.Logging.Enums;
+using Echotools.Logging.Services;
+using Echosync.Helper;
+using Echosync.Localization;
 
 namespace Echosync.Windows;
 
 public class ConfigWindow : Window, IDisposable
 {
-    #region Logs
+    private readonly Configuration _configuration;
+    private readonly SyncClientHelper _syncClient;
+    private readonly ILogService _log;
 
     private List<LogMessage> _filteredLogsGeneral = [];
     private string _filterLogsGeneralMethod = "";
     private string _filterLogsGeneralMessage = "";
     private string _filterLogsGeneralId = "";
-    public static bool UpdateLogGeneralFilter = true;
-    public static bool UpdateLogSyncFilter = true;
-    private List<LogMessage> _filteredLogsSync = [];
     private bool _resetLogGeneralFilter = true;
-    private bool _resetLogSyncFilter = true;
+    private bool _updateLogGeneralFilter = true;
+
+    private List<LogMessage> _filteredLogsSync = [];
     private string _filterLogsSyncMethod = "";
     private string _filterLogsSyncMessage = "";
     private string _filterLogsSyncId = "";
+    private bool _resetLogSyncFilter = true;
+    private bool _updateLogSyncFilter = true;
 
-    #endregion
-
-    // We give this window a constant ID using ###
-    // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
-    // and the window ID will always be "###XYZ counter window" for ImGui
-    public ConfigWindow() : base("Echosync-Configuration")
+    public ConfigWindow(Configuration configuration, SyncClientHelper syncClient, ILogService log)
+        : base($"Echosync {Plugin.PluginVersion} {Loc.S("Configuration")}###EchosyncConfig")
     {
+        _configuration = configuration;
+        _syncClient = syncClient;
+        _log = log;
+
         Flags = ImGuiWindowFlags.AlwaysVerticalScrollbar & ImGuiWindowFlags.HorizontalScrollbar & ImGuiWindowFlags.AlwaysHorizontalScrollbar;
         Size = new Vector2(540, 480);
         SizeCondition = ImGuiCond.FirstUseEver;
+
+        _log.LogUpdated += source =>
+        {
+            if (source == TextSource.None) _updateLogGeneralFilter = true;
+            if (source == TextSource.Sync) _updateLogSyncFilter = true;
+        };
     }
 
     public void Dispose() { }
 
     public override void PreDraw()
     {
-        // Flags must be added or removed before Draw() is being called, or they won't apply
-        if (Plugin.Configuration.IsConfigWindowMovable)
-        {
+        if (_configuration.IsConfigWindowMovable)
             Flags &= ~ImGuiWindowFlags.NoMove;
-        }
         else
-        {
             Flags |= ImGuiWindowFlags.NoMove;
-        }
     }
 
     public override void Draw()
     {
-        DrawSettings();
-    }
-    private void DrawSettings()
-    {
         try
         {
-            if (ImGui.BeginTabBar($"Settings##ESSettingsTab"))
+            if (ImGui.BeginTabBar("Settings##ESSettingsTab"))
             {
-                if (ImGui.BeginTabItem("General"))
+                if (ImGui.BeginTabItem($"{Loc.S("General")}##ESGeneralTab"))
                 {
                     DrawGeneral();
                     ImGui.EndTabItem();
                 }
-                if (ImGui.BeginTabItem("Logs"))
+                if (ImGui.BeginTabItem($"{Loc.S("Logs")}##ESLogsTab"))
                 {
                     DrawLogs();
                     ImGui.EndTabItem();
                 }
-                if (ImGui.BeginTabItem("Fakeuser"))
+                if (ImGui.BeginTabItem($"{Loc.S("Fakeuser")}##ESFakeuserTab"))
                 {
                     DrawFakeUser();
                     ImGui.EndTabItem();
@@ -87,155 +88,149 @@ public class ConfigWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod()!.Name, $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
+            _log.Error(nameof(Draw), $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
         }
     }
 
-
-    #region Settings
     private void DrawGeneral()
     {
-        var enabled = Plugin.Configuration.Enabled;
-        if (ImGui.Checkbox("Enabled", ref enabled))
+        var enabled = _configuration.Enabled;
+        if (ImGui.Checkbox($"{Loc.S("Enabled")}##ESEnabled", ref enabled))
         {
-            Plugin.Configuration.Enabled = enabled;
-            Plugin.Configuration.Save();
+            _configuration.Enabled = enabled;
+            _configuration.Save();
         }
 
         using (ImRaii.Disabled(!enabled))
         {
-            var onlySpecialNpCs = Plugin.Configuration.OnlySpecialNpcs;
-            if (ImGui.Checkbox("Only special NPCs (Any marker above head)", ref onlySpecialNpCs))
+            var onlySpecialNpCs = _configuration.OnlySpecialNpcs;
+            if (ImGui.Checkbox($"{Loc.S("Only special NPCs (Any marker above head)")}##ESOnlySpecial", ref onlySpecialNpCs))
             {
-                Plugin.Configuration.OnlySpecialNpcs = onlySpecialNpCs;
-                Plugin.Configuration.Save();
+                _configuration.OnlySpecialNpcs = onlySpecialNpCs;
+                _configuration.Save();
             }
 
-            var waitForNearbyUsers = Plugin.Configuration.WaitForNearbyUsers;
-            if (ImGui.Checkbox("Wait for nearby users after starting an dialogue", ref waitForNearbyUsers))
+            var syncServer = _configuration.SyncServer;
+            if (ImGui.InputText($"{Loc.S("Sync server")}##ESserver", ref syncServer, 80))
             {
-                Plugin.Configuration.WaitForNearbyUsers = waitForNearbyUsers;
-                Plugin.Configuration.Save();
+                _configuration.SyncServer = syncServer;
+                _configuration.Save();
             }
 
-            var syncServer = Plugin.Configuration.SyncServer;
-            if (ImGui.InputText($"Sync server##ESserver", ref syncServer, 80))
+            var syncChannel = _configuration.SyncChannel;
+            if (ImGui.InputText($"{Loc.S("Sync channel")}##ESchannel", ref syncChannel, 80))
             {
-                Plugin.Configuration.SyncServer = syncServer;
-                Plugin.Configuration.Save();
+                _configuration.SyncChannel = syncChannel;
+                _configuration.Save();
             }
 
-            var syncChannel = Plugin.Configuration.SyncChannel;
-            if (ImGui.InputText($"Sync channel##ESchannel", ref syncChannel, 80))
+            var syncPassword = _configuration.SyncPassword;
+            if (ImGui.InputText($"{Loc.S("Sync password")}##ESpassword", ref syncPassword, 80))
             {
-                Plugin.Configuration.SyncChannel = syncChannel;
-                Plugin.Configuration.Save();
+                _configuration.SyncPassword = syncPassword;
+                _configuration.Save();
             }
 
-            var syncPassword = Plugin.Configuration.SyncPassword;
-            if (ImGui.InputText($"Sync password##ESchannel", ref syncPassword, 80))
+            if (_syncClient.Connected)
             {
-                Plugin.Configuration.SyncPassword = syncPassword;
-                Plugin.Configuration.Save();
-            }
-
-            if (SyncClientHelper.Connected)
-            {
-                if (ImGui.Button($"Disconnect##ESDisconnect"))
-                {
-                    SyncClientHelper.Disconnect();
-                }
+                if (ImGui.Button($"{Loc.S("Disconnect")}##ESDisconnect"))
+                    _syncClient.Disconnect();
             }
             else
             {
-                if (ImGui.Button($"Connect##ESConnect"))
-                {
-                    SyncClientHelper.Connect();
-                }
+                if (ImGui.Button($"{Loc.S("Connect")}##ESConnect"))
+                    _syncClient.Connect();
             }
 
             ImGui.SameLine();
-            var connectAtStart = Plugin.Configuration.ConnectAtStart;
-            if (ImGui.Checkbox("Connect at start", ref connectAtStart))
+            var connectAtStart = _configuration.ConnectAtStart;
+            if (ImGui.Checkbox($"{Loc.S("Connect at start")}##ESConnectAtStart", ref connectAtStart))
             {
-                Plugin.Configuration.ConnectAtStart = connectAtStart;
-                Plugin.Configuration.Save();
+                _configuration.ConnectAtStart = connectAtStart;
+                _configuration.Save();
 
                 if (connectAtStart)
-                    SyncClientHelper.Connect();
+                    _syncClient.Connect();
             }
         }
     }
-    #endregion
-    #region Logs
+
     private void DrawLogs()
     {
         try
         {
-            if (ImGui.BeginTabBar($"Logs##ESLogsTab"))
+            _log.UpdateMainThreadLogs();
+
+            if (ImGui.BeginTabBar("Logs##ESLogsTab"))
             {
-                if (ImGui.BeginTabItem("General"))
+                if (ImGui.BeginTabItem($"{Loc.S("General")}##ESLogGeneralTab"))
                 {
-                    if (ImGui.CollapsingHeader("Options:"))
+                    var cfg = _configuration.GetLogConfig(TextSource.None);
+                    if (ImGui.CollapsingHeader($"{Loc.S("Options:")}##ESLogGeneralOptions"))
                     {
-                        var showDebugLog = Plugin.Configuration.LogConfig!.ShowGeneralDebugLog;
-                        if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
+                        var showDebugLog = cfg.ShowDebugLog;
+                        if (ImGui.Checkbox($"{Loc.S("Show debug logs")}##ESGenShowDebug", ref showDebugLog))
                         {
-                            Plugin.Configuration.LogConfig.ShowGeneralDebugLog = showDebugLog;
-                            Plugin.Configuration.Save();
-                            UpdateLogGeneralFilter = true;
+                            cfg.ShowDebugLog = showDebugLog;
+                            _configuration.Save();
+                            _updateLogGeneralFilter = true;
                         }
-                        var showErrorLog = Plugin.Configuration.LogConfig.ShowGeneralErrorLog;
-                        if (ImGui.Checkbox("Show error logs", ref showErrorLog))
+                        var showErrorLog = cfg.ShowErrorLog;
+                        if (ImGui.Checkbox($"{Loc.S("Show error logs")}##ESGenShowError", ref showErrorLog))
                         {
-                            Plugin.Configuration.LogConfig.ShowGeneralErrorLog = showErrorLog;
-                            Plugin.Configuration.Save();
-                            UpdateLogGeneralFilter = true;
+                            cfg.ShowErrorLog = showErrorLog;
+                            _configuration.Save();
+                            _updateLogGeneralFilter = true;
                         }
-                        var jumpToBottom = Plugin.Configuration.LogConfig.GeneralJumpToBottom;
-                        if (ImGui.Checkbox("Always jump to bottom", ref jumpToBottom))
+                        var jumpToBottom = cfg.JumpToBottom;
+                        if (ImGui.Checkbox($"{Loc.S("Always jump to bottom")}##ESGenJumpBottom", ref jumpToBottom))
                         {
-                            Plugin.Configuration.LogConfig.GeneralJumpToBottom = jumpToBottom;
-                            Plugin.Configuration.Save();
+                            cfg.JumpToBottom = jumpToBottom;
+                            _configuration.Save();
                         }
                     }
-                    DrawLogTable("General", TextSource.None, Plugin.Configuration.LogConfig!.GeneralJumpToBottom, ref _filteredLogsGeneral!, ref UpdateLogGeneralFilter, ref _resetLogGeneralFilter, ref _filterLogsGeneralMethod, ref _filterLogsGeneralMessage, ref _filterLogsGeneralId);
+                    DrawLogTable("General", TextSource.None, cfg.JumpToBottom,
+                        ref _filteredLogsGeneral!, ref _updateLogGeneralFilter, ref _resetLogGeneralFilter,
+                        ref _filterLogsGeneralMethod, ref _filterLogsGeneralMessage, ref _filterLogsGeneralId);
 
                     ImGui.EndTabItem();
                 }
-                if (ImGui.BeginTabItem("Sync"))
+                if (ImGui.BeginTabItem("Sync##ESLogSyncTab"))
                 {
-                    if (ImGui.CollapsingHeader("Options:"))
+                    var cfg = _configuration.GetLogConfig(TextSource.Sync);
+                    if (ImGui.CollapsingHeader($"{Loc.S("Options:")}##ESLogSyncOptions"))
                     {
-                        var showDebugLog = Plugin.Configuration.LogConfig!.ShowSyncDebugLog;
-                        if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
+                        var showDebugLog = cfg.ShowDebugLog;
+                        if (ImGui.Checkbox($"{Loc.S("Show debug logs")}##ESSyncShowDebug", ref showDebugLog))
                         {
-                            Plugin.Configuration.LogConfig.ShowSyncDebugLog = showDebugLog;
-                            Plugin.Configuration.Save();
-                            UpdateLogSyncFilter = true;
+                            cfg.ShowDebugLog = showDebugLog;
+                            _configuration.Save();
+                            _updateLogSyncFilter = true;
                         }
-                        var showErrorLog = Plugin.Configuration.LogConfig.ShowSyncErrorLog;
-                        if (ImGui.Checkbox("Show error logs", ref showErrorLog))
+                        var showErrorLog = cfg.ShowErrorLog;
+                        if (ImGui.Checkbox($"{Loc.S("Show error logs")}##ESSyncShowError", ref showErrorLog))
                         {
-                            Plugin.Configuration.LogConfig.ShowSyncErrorLog = showErrorLog;
-                            Plugin.Configuration.Save();
-                            UpdateLogSyncFilter = true;
+                            cfg.ShowErrorLog = showErrorLog;
+                            _configuration.Save();
+                            _updateLogSyncFilter = true;
                         }
-                        var showId0 = Plugin.Configuration.LogConfig.ShowSyncId0;
-                        if (ImGui.Checkbox("Show ID: 0", ref showId0))
+                        var showId0 = cfg.ShowId0;
+                        if (ImGui.Checkbox($"{Loc.S("Show ID: 0")}##ESSyncShowId0", ref showId0))
                         {
-                            Plugin.Configuration.LogConfig.ShowSyncId0 = showId0;
-                            Plugin.Configuration.Save();
-                            UpdateLogSyncFilter = true;
+                            cfg.ShowId0 = showId0;
+                            _configuration.Save();
+                            _updateLogSyncFilter = true;
                         }
-                        var jumpToBottom = Plugin.Configuration.LogConfig.SyncJumpToBottom;
-                        if (ImGui.Checkbox("Always jump to bottom", ref jumpToBottom))
+                        var jumpToBottom = cfg.JumpToBottom;
+                        if (ImGui.Checkbox($"{Loc.S("Always jump to bottom")}##ESSyncJumpBottom", ref jumpToBottom))
                         {
-                            Plugin.Configuration.LogConfig.SyncJumpToBottom = jumpToBottom;
-                            Plugin.Configuration.Save();
+                            cfg.JumpToBottom = jumpToBottom;
+                            _configuration.Save();
                         }
                     }
-                    DrawLogTable("Sync", TextSource.Sync, Plugin.Configuration.LogConfig!.SyncJumpToBottom, ref _filteredLogsSync!, ref UpdateLogSyncFilter, ref _resetLogSyncFilter, ref _filterLogsSyncMethod, ref _filterLogsSyncMessage, ref _filterLogsSyncId);
+                    DrawLogTable("Sync", TextSource.Sync, cfg.JumpToBottom,
+                        ref _filteredLogsSync!, ref _updateLogSyncFilter, ref _resetLogSyncFilter,
+                        ref _filterLogsSyncMethod, ref _filterLogsSyncMessage, ref _filterLogsSyncId);
 
                     ImGui.EndTabItem();
                 }
@@ -245,30 +240,30 @@ public class ConfigWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod()!.Name, $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
+            _log.Error(nameof(DrawLogs), $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
         }
     }
 
-    private static void DrawLogTable(string logType, TextSource source, bool scrollToBottom, ref List<LogMessage>? filteredLogs, ref bool updateLogs, ref bool resetLogs, ref string filterMethod, ref string filterMessage, ref string filterId)
+    private void DrawLogTable(string logType, TextSource source, bool scrollToBottom,
+        ref List<LogMessage>? filteredLogs, ref bool updateLogs, ref bool resetLogs,
+        ref string filterMethod, ref string filterMessage, ref string filterId)
     {
         var newData = false;
-        if (ImGui.CollapsingHeader("Log:"))
+        if (ImGui.CollapsingHeader($"{Loc.S("Log:")}##{logType}LogHeader"))
         {
             if (filteredLogs == null)
-            {
                 updateLogs = true;
-            }
 
             if (updateLogs || (resetLogs && (filterMethod.Length == 0 || filterMessage.Length == 0 || filterId.Length == 0)))
             {
-                filteredLogs = LogHelper.RecreateLogList(source);
+                filteredLogs = new List<LogMessage>(_log.GetLogsForSource(source));
                 updateLogs = true;
                 resetLogs = false;
                 newData = true;
             }
             if (ImGui.BeginTable($"Log Table##{logType}LogTable", 4, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollY))
             {
-                ImGui.TableSetupScrollFreeze(0, 2); // Make top row always visible
+                ImGui.TableSetupScrollFreeze(0, 2);
                 ImGui.TableSetupColumn("Timestamp", ImGuiTableColumnFlags.WidthFixed, 75f);
                 ImGui.TableSetupColumn("Method", ImGuiTableColumnFlags.WidthFixed, 150f);
                 ImGui.TableSetupColumn("Message", ImGuiTableColumnFlags.None, 500f);
@@ -280,7 +275,7 @@ public class ConfigWindow : Window, IDisposable
                 if (ImGui.InputText($"##ESFilter{logType}LogMethod", ref filterMethod, 40) || (filterMethod.Length > 0 && updateLogs))
                 {
                     var method = filterMethod;
-                    filteredLogs = filteredLogs!.FindAll(p => p.Method.ToLower().Contains(method.ToLower()));
+                    filteredLogs = filteredLogs!.FindAll(p => p.Method.Contains(method, StringComparison.OrdinalIgnoreCase));
                     updateLogs = true;
                     resetLogs = true;
                     newData = true;
@@ -290,7 +285,7 @@ public class ConfigWindow : Window, IDisposable
                 if (ImGui.InputText($"##ESFilter{logType}LogMessage", ref filterMessage, 80) || (filterMessage.Length > 0 && updateLogs))
                 {
                     var message = filterMessage;
-                    filteredLogs = filteredLogs!.FindAll(p => p.Message.ToLower().Contains(message.ToLower()));
+                    filteredLogs = filteredLogs!.FindAll(p => p.Message.Contains(message, StringComparison.OrdinalIgnoreCase));
                     updateLogs = true;
                     resetLogs = true;
                     newData = true;
@@ -300,7 +295,7 @@ public class ConfigWindow : Window, IDisposable
                 if (ImGui.InputText($"##ESFilter{logType}LogId", ref filterId, 40) || (filterId.Length > 0 && updateLogs))
                 {
                     var id = filterId;
-                    filteredLogs = filteredLogs!.FindAll(p => p.EventId.Id.ToString().ToLower().Contains(id.ToLower()));
+                    filteredLogs = filteredLogs!.FindAll(p => p.EventId.Id.ToString().Contains(id, StringComparison.OrdinalIgnoreCase));
                     updateLogs = true;
                     resetLogs = true;
                     newData = true;
@@ -356,36 +351,23 @@ public class ConfigWindow : Window, IDisposable
                 }
 
                 if (scrollToBottom && newData)
-                {
                     ImGui.SetScrollHereY();
-                }
 
                 ImGui.EndTable();
             }
         }
     }
-    #endregion
-    #region FakeUser
+
     private void DrawFakeUser()
     {
-        if (ImGui.Button($"Start NPC##ESStartNpc"))
-        {
-            SyncClientHelper.CreateMessageFake(SyncMessages.StartNpc);
-        }
+        if (ImGui.Button($"{Loc.S("Enter Dialogue")}##ESEnterDialogue"))
+            _syncClient.SendDialogueEnter("fake-npc", "fake-hash");
+
         ImGui.SameLine();
-        if (ImGui.Button($"End NPC##ESEndNpc"))
-        {
-            SyncClientHelper.CreateMessageFake(SyncMessages.EndNpc);
-        }
-        if (ImGui.Button($"Join Dialogue##ESJoinDialogue"))
-        {
-            SyncClientHelper.CreateMessageFake(SyncMessages.ClickSuccess, AddonTalkHelper.ActiveDialogue);
-        }
-        ImGui.SameLine();
-        if (ImGui.Button($"Click##ESClick"))
-        {
-            SyncClientHelper.CreateMessageFake(SyncMessages.Click, AddonTalkHelper.ActiveDialogue);
-        }
+        if (ImGui.Button($"{Loc.S("Exit Dialogue")}##ESExitDialogue"))
+            _syncClient.SendDialogueExit();
+
+        if (ImGui.Button($"{Loc.S("Request Advance")}##ESRequestAdvance"))
+            _syncClient.SendDialogueAdvance("fake-hash");
     }
-    #endregion
 }

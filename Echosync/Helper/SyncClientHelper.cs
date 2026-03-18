@@ -1,340 +1,390 @@
 using Dalamud.Plugin.Services;
 using Echosync.DataClasses;
-using Echosync.Enums;
+using Echotools.Logging.DataClasses;
+using Echotools.Logging.Enums;
+using Echotools.Logging.Services;
 using System;
-using System.Collections.Generic;
-using System.Reflection;
-using Dalamud.Game.ClientState.Objects.SubKinds;
-using Echosync_Data.Enums;
-using FFXIVClientStructs.FFXIV.Client.System.Framework;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using Echosync.Data.Enums;
 using WebSocketSharp.NetCore;
 
-namespace Echosync.Helper
+namespace Echosync.Helper;
+
+public enum ClientDialogueState
 {
-    public static class SyncClientHelper
+    Idle,
+    InDialogue,
+    AwaitingGrant,
+}
+
+public class SyncGroupInfo
+{
+    public int ReadyCount { get; set; }
+    public int TotalCount { get; set; }
+    public int TimeoutSeconds { get; set; }
+    public string NpcId { get; set; } = "";
+}
+
+public class SyncClientHelper : IDisposable
+{
+    private readonly IFramework _framework;
+    private readonly IObjectTable _objectTable;
+    private readonly Configuration _configuration;
+    private readonly ILogService _log;
+
+    public volatile bool Connected;
+    public volatile bool AdvanceGranted;
+    public ClientDialogueState DialogueState { get; set; } = ClientDialogueState.Idle;
+    public SyncGroupInfo SyncGroup { get; } = new();
+    public int ConnectedPlayerCount { get; set; }
+
+    private WebSocket? _webSocket;
+    private string _activeChannel = "";
+    private EKEventId? _currentEvent;
+    private string _syncServerThread = "main";
+    private System.Threading.Timer? _positionTimer;
+
+    public EKEventId? CurrentEvent
     {
-        public static bool Connected;
-        public static bool AllReady;
-        public static int ConnectedPlayersDialogue;
-        public static readonly List<uint> ConnectedPlayers = [];
-        public static readonly List<uint> ConnectedPlayersNpc = [];
-        public static int ConnectedPlayersReady { get; set; }
-        private static WebSocket? _webSocket;
-        private static string _activeChannel = "";
-        private static string _entityId = "";
-        private static EKEventId? _currentEvent;
-        private static string _syncServerThread = "main";
+        get => _currentEvent ?? new EKEventId(0, TextSource.Sync);
+        set => _currentEvent = value;
+    }
 
-        public static EKEventId? CurrentEvent
+    public SyncClientHelper(IFramework framework, IObjectTable objectTable, Configuration configuration, ILogService log)
+    {
+        _framework = framework;
+        _objectTable = objectTable;
+        _configuration = configuration;
+        _log = log;
+    }
+
+    public void Setup()
+    {
+        try
         {
-            get => _currentEvent ?? new EKEventId(0, TextSource.Sync);
-            set => _currentEvent = value;
+            if (_configuration is { ConnectAtStart: true, Enabled: true })
+                Connect();
         }
-
-        public static void Setup()
+        catch (Exception ex)
         {
-            Plugin.Framework.RunOnFrameworkThread(() =>
+            _log.Error(nameof(Setup), $"Error while starting: {ex}", CurrentEvent!);
+        }
+    }
+
+    private void InitializeWebSocket()
+    {
+        try
+        {
+            _log.Info(nameof(InitializeWebSocket), $"Initializing connection to: {_configuration.SyncServer}/{_syncServerThread}", CurrentEvent!);
+            if (_webSocket is { ReadyState: WebSocketState.Open })
+                _webSocket.Close();
+            _webSocket = new WebSocket($"{_configuration.SyncServer}/{_syncServerThread}");
+
+            if (_syncServerThread == "main")
             {
-                var localPlayer = Plugin.ClientState!.LocalPlayer;
-                _entityId = localPlayer!.EntityId.ToString();
+                _webSocket.OnMessage += OnMessageMain;
+                _webSocket.OnOpen += OnOpenMain;
+                _webSocket.OnClose += OnCloseMain;
+            }
+            else
+            {
+                _webSocket.OnMessage += OnMessageChannel;
+                _webSocket.OnOpen += OnOpenChannel;
+                _webSocket.OnClose += OnCloseChannel;
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Error(nameof(InitializeWebSocket), $"Error while initializing: {ex}", CurrentEvent!);
+        }
+    }
+
+    public void Test()
+    {
+        _log.Info(nameof(Test), "Testing connection to server", CurrentEvent!);
+        _syncServerThread = "main";
+        Connect();
+        SendRaw($"{(int)SyncMessages.Test}");
+    }
+
+    public void Connect()
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(_activeChannel) && Connected)
+                Disconnect();
+
+            InitializeWebSocket();
+            _log.Info(nameof(Connect), "Connecting to server", CurrentEvent!);
+
+            _activeChannel = _configuration.SyncChannel;
+            _webSocket!.Connect();
+            Authenticate(_configuration.SyncPassword);
+        }
+        catch (Exception ex)
+        {
+            _log.Error(nameof(Connect), $"Error while connecting: {ex}", CurrentEvent!);
+        }
+    }
+
+    public void Disconnect(bool silent = false)
+    {
+        try
+        {
+            _log.Info(nameof(Disconnect), "Disconnecting from server", CurrentEvent!);
+            StopPositionReports();
+
+            if (!silent && Connected)
+            {
+                _webSocket!.Close();
+                _log.Info(nameof(Disconnect), $"Disconnected from channel: {_activeChannel}", CurrentEvent!);
+            }
+            else
+                _log.Info(nameof(Disconnect), $"Not connected: {_webSocket!.ReadyState}", CurrentEvent!);
+        }
+        catch (Exception ex)
+        {
+            _log.Error(nameof(Disconnect), $"Error while disconnecting: {ex}", CurrentEvent!);
+        }
+    }
+
+    private void RequestChannel(SyncMessages message, string channel, string password)
+    {
+        try
+        {
+            _log.Info(nameof(RequestChannel), $"Sending '{message}' for channel '{channel}'", CurrentEvent!);
+            _webSocket!.Send($"{(int)message}|{channel}|{password}");
+            _log.Info(nameof(RequestChannel), $"Sent '{message}' to main", CurrentEvent!);
+        }
+        catch (Exception ex)
+        {
+            _log.Error(nameof(RequestChannel), $"Error while sending message: {ex}", CurrentEvent!);
+        }
+    }
+
+    private void Authenticate(string password)
+    {
+        try
+        {
+            _log.Info(nameof(Authenticate), $"Sending '{SyncMessages.Authenticate}' to channel: {_activeChannel}", CurrentEvent!);
+            if (!Connected)
+            {
+                _log.Info(nameof(Authenticate), $"Not connected: {_webSocket!.ReadyState}", CurrentEvent!);
+                return;
+            }
+
+            _webSocket!.Send($"{(int)SyncMessages.Authenticate}|{password}");
+            _log.Info(nameof(Authenticate), $"Sent '{SyncMessages.Authenticate}' to channel: {_activeChannel}", CurrentEvent!);
+        }
+        catch (Exception ex)
+        {
+            _log.Error(nameof(Authenticate), $"Error while sending message: {ex}", CurrentEvent!);
+        }
+    }
+
+    public void SendDialogueEnter(string npcId, string dialogueTextHash)
+    {
+        SendRaw($"{(int)SyncMessages.C2S_DialogueEnter}|{npcId}|{dialogueTextHash}");
+    }
+
+    public void SendDialogueAdvance(string? dialogueTextHash = null)
+    {
+        var body = $"{(int)SyncMessages.C2S_DialogueAdvance}";
+        if (!string.IsNullOrEmpty(dialogueTextHash))
+            body += $"|{dialogueTextHash}";
+        SendRaw(body);
+        DialogueState = ClientDialogueState.AwaitingGrant;
+    }
+
+    public void SendDialogueExit()
+    {
+        SendRaw($"{(int)SyncMessages.C2S_DialogueExit}");
+        DialogueState = ClientDialogueState.Idle;
+    }
+
+    private void SendRaw(string body)
+    {
+        try
+        {
+            if (!Connected)
+            {
+                _log.Info(nameof(SendRaw), $"Not connected: {_webSocket!.ReadyState}", CurrentEvent!);
+                return;
+            }
+
+            _webSocket!.Send(body);
+        }
+        catch (Exception ex)
+        {
+            _log.Error(nameof(SendRaw), $"Error while sending message: {ex}", CurrentEvent!);
+        }
+    }
+
+    public void StartPositionReports()
+    {
+        if (_positionTimer != null) return;
+        _positionTimer = new System.Threading.Timer(_ => SendPositionReport(), null, TimeSpan.Zero, TimeSpan.FromMilliseconds(500));
+    }
+
+    public void StopPositionReports()
+    {
+        _positionTimer?.Dispose();
+        _positionTimer = null;
+    }
+
+    private void SendPositionReport()
+    {
+        try
+        {
+            if (!Connected) return;
+
+            _framework.RunOnFrameworkThread(() =>
+            {
+                var player = _objectTable.LocalPlayer;
+                if (player == null) return;
+
+                var pos = player.Position;
+                var targetNpcId = player.TargetObject?.GameObjectId.ToString() ?? "";
+                SendRaw($"{(int)SyncMessages.C2S_PositionReport}|{pos.X.ToString(CultureInfo.InvariantCulture)}|{pos.Y.ToString(CultureInfo.InvariantCulture)}|{pos.Z.ToString(CultureInfo.InvariantCulture)}|{targetNpcId}");
             });
-            try
+        }
+        catch (Exception ex)
+        {
+            _log.Error(nameof(SendPositionReport), $"Error sending position: {ex}", CurrentEvent!);
+        }
+    }
+
+    public static string HashDialogueText(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(text));
+        return Convert.ToHexString(bytes)[..16];
+    }
+
+    private void OnMessageMain(object? sender, MessageEventArgs e)
+    {
+        var textMessage = e.Data;
+        try
+        {
+            var messageEnum = (SyncMessages)Convert.ToInt32(textMessage);
+
+            switch (messageEnum)
             {
-                if (Plugin.Configuration is { ConnectAtStart: true, Enabled: true })
-                {
+                case SyncMessages.CreateChannel:
+                    _log.Info(nameof(OnMessageMain), "Server created channel", CurrentEvent!);
+                    _syncServerThread = _activeChannel;
                     Connect();
-                }
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error(MethodBase.GetCurrentMethod()!.Name, $"Error while starting: {ex}", CurrentEvent!);
+                    break;
+                case SyncMessages.Test:
+                    _log.Info(nameof(OnMessageMain), $"Received command '{messageEnum}'", CurrentEvent!);
+                    break;
             }
         }
-
-        private static void InitializeWebSocket()
+        catch (Exception ex)
         {
-            try
-            {
-                LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Initializing connection to: {Plugin.Configuration!.SyncServer + "/" + _syncServerThread}", CurrentEvent!);
-                if (_webSocket is { ReadyState: WebSocketState.Open })
-                    _webSocket.Close();
-                _webSocket = new WebSocket(Plugin.Configuration.SyncServer + "/" + _syncServerThread);
-
-                if (_syncServerThread == "main")
-                {
-                    _webSocket.OnMessage += Ws_OnMessageMain;
-                    _webSocket.OnOpen += WebSocket_OnOpenMain;
-                    _webSocket.OnClose += WebSocket_OnCloseMain;
-                }
-                else
-                {
-                    _webSocket.OnMessage += Ws_OnMessageChannel;
-                    _webSocket.OnOpen += WebSocket_OnOpenChannel;
-                    _webSocket.OnClose += WebSocket_OnCloseChannel;
-                }
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error(MethodBase.GetCurrentMethod()!.Name, $"Error while initializing: {ex}", CurrentEvent!);
-            }
+            _log.Error(nameof(OnMessageMain), $"Received illegal message '{textMessage}' from main: {ex}", CurrentEvent!);
         }
+    }
 
-        public static void Test()
+    private void OnOpenMain(object? sender, EventArgs e)
+    {
+        _log.Info(nameof(OnOpenMain), "Connected to main server", CurrentEvent!);
+        RequestChannel(SyncMessages.CreateChannel, _activeChannel, _configuration.SyncPassword);
+    }
+
+    private void OnCloseMain(object? sender, EventArgs e)
+    {
+        _log.Info(nameof(OnCloseMain), "Disconnected from main server", CurrentEvent!);
+    }
+
+    private void OnMessageChannel(object? sender, MessageEventArgs e)
+    {
+        var textMessage = e.Data;
+        try
         {
-            LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Testing connection to server", CurrentEvent!);
-            _syncServerThread = "main";
-            Connect();
-            CreateMessage(SyncMessages.Test);
-        }
+            var messageSplit = textMessage.Split('|');
+            var messageEnum = (SyncMessages)Convert.ToInt32(messageSplit[0]);
 
-        public static void Connect()
+            switch (messageEnum)
+            {
+                case SyncMessages.S2C_Authenticated:
+                    _log.Info(nameof(OnMessageChannel), "Authenticated successfully", CurrentEvent!);
+                    StartPositionReports();
+                    break;
+
+                case SyncMessages.S2C_AuthFailed:
+                    _log.Error(nameof(OnMessageChannel), "Authentication failed", CurrentEvent!);
+                    break;
+
+                case SyncMessages.S2C_ChannelState:
+                    ConnectedPlayerCount = messageSplit.Length > 1 ? Convert.ToInt32(messageSplit[1]) : 0;
+                    _log.Debug(nameof(OnMessageChannel), $"Channel state: {ConnectedPlayerCount} other users in '{_activeChannel}'", CurrentEvent!);
+                    break;
+
+                case SyncMessages.S2C_AdvanceGranted:
+                    _log.Debug(nameof(OnMessageChannel), "Advance granted", CurrentEvent!);
+                    AdvanceGranted = true;
+                    break;
+
+                case SyncMessages.S2C_AdvanceWait:
+                    _log.Debug(nameof(OnMessageChannel), "Waiting for others", CurrentEvent!);
+                    break;
+
+                case SyncMessages.S2C_AdvanceCatchupWait:
+                    _log.Debug(nameof(OnMessageChannel), "Waiting for nearby user catchup", CurrentEvent!);
+                    break;
+
+                case SyncMessages.S2C_SyncGroupUpdate:
+                    if (messageSplit.Length >= 5)
+                    {
+                        SyncGroup.NpcId = messageSplit[1];
+                        SyncGroup.ReadyCount = Convert.ToInt32(messageSplit[2]);
+                        SyncGroup.TotalCount = Convert.ToInt32(messageSplit[3]);
+                        SyncGroup.TimeoutSeconds = Convert.ToInt32(messageSplit[4]);
+                    }
+                    _log.Debug(nameof(OnMessageChannel), $"Sync group: {SyncGroup.ReadyCount}/{SyncGroup.TotalCount}", CurrentEvent!);
+                    break;
+
+                case SyncMessages.S2C_UserTimedOut:
+                    var timedOutUser = messageSplit.Length > 1 ? messageSplit[1] : "unknown";
+                    _log.Info(nameof(OnMessageChannel), $"User '{timedOutUser}' timed out", CurrentEvent!);
+                    break;
+
+                case SyncMessages.S2C_Pong:
+                    _log.Debug(nameof(OnMessageChannel), "Pong received", CurrentEvent!);
+                    break;
+
+                case SyncMessages.ServerShutdown:
+                    _log.Debug(nameof(OnMessageChannel), "Server shutdown", CurrentEvent!);
+                    Disconnect(true);
+                    break;
+            }
+        }
+        catch (Exception ex)
         {
-            try
-            {
-                if (!string.IsNullOrWhiteSpace(_activeChannel) && Connected)
-                    Disconnect();
-
-                InitializeWebSocket();
-                LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Connecting to server", CurrentEvent!);
-
-                _activeChannel = Plugin.Configuration!.SyncChannel;
-                _webSocket!.Connect();
-                Authenticate(Plugin.Configuration.SyncPassword, _entityId);
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error(MethodBase.GetCurrentMethod()!.Name, $"Error while connecting: {ex}", CurrentEvent!);
-            }
+            _log.Error(nameof(OnMessageChannel), $"Received illegal message '{textMessage}' from channel: {_activeChannel}: {ex}", CurrentEvent!);
         }
+    }
 
-        public static void Disconnect(bool silent = false)
-        {
-            try
-            {
-                LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Disconnecting from server", CurrentEvent!);
+    private void OnOpenChannel(object? sender, EventArgs e)
+    {
+        _log.Info(nameof(OnOpenChannel), $"Connected to channel '{_activeChannel}'", CurrentEvent!);
+        Connected = true;
+    }
 
-                if (!silent && Connected)
-                {
-                    _webSocket!.Close();
-                    LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Disconnected from channel: {_activeChannel}", CurrentEvent!);
-                }
-                else
-                    LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Not connected: {_webSocket!.ReadyState}", CurrentEvent!);
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error(MethodBase.GetCurrentMethod()!.Name, $"Error while disconnecting: {ex}", CurrentEvent!);
-            }
-        }
+    private void OnCloseChannel(object? sender, EventArgs e)
+    {
+        _log.Info(nameof(OnCloseChannel), $"Disconnected from channel '{_activeChannel}'", CurrentEvent!);
+        _syncServerThread = "main";
+        Connected = false;
+        StopPositionReports();
+    }
 
-        private static void RequestChannel(SyncMessages message, string channel, string password)
-        {
-            try
-            {
-                LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Sending '{message.ToString()}' for channel '{channel}'", CurrentEvent!);
-
-                var bodyString = $"{((int)message)}|{channel}|{password}";
-                _webSocket!.Send(bodyString);
-                LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Sent '{message.ToString()}' to main", CurrentEvent!);
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error(MethodBase.GetCurrentMethod()!.Name, $"Error while sending message: {ex}", CurrentEvent!);
-            }
-        }
-
-        private static void Authenticate(string password, string networkId)
-        {
-            try
-            {
-                LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Sending '{SyncMessages.Authenticate.ToString()}' to channel: {_activeChannel}", CurrentEvent!);
-                if (!Connected)
-                {
-                    LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Not connected: {_webSocket!.ReadyState}", CurrentEvent!);
-                    return;
-                }
-
-                var bodyString = $"{((int)SyncMessages.Authenticate)}|{_entityId}|{password}|{networkId}";
-                _webSocket!.Send(bodyString);
-                LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Sent '{SyncMessages.Authenticate.ToString()}' to channel: {_activeChannel}", CurrentEvent!);
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error(MethodBase.GetCurrentMethod()!.Name, $"Error while sending message: {ex}", CurrentEvent!);
-            }
-        }
-
-        public static void CreateMessage(SyncMessages message)
-        {
-            try
-            {
-                LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Sending '{message.ToString()}' to channel: {_activeChannel}", CurrentEvent!);
-                if (!Connected)
-                {
-                    LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Not connected: {_webSocket!.ReadyState}", CurrentEvent!);
-                    return;
-                }
-
-                var bodyString = $"{((int)message)}";
-                if (message == SyncMessages.StartNpc)
-                {
-                    var npcId = !string.IsNullOrWhiteSpace(AddonTalkHelper.ActiveNpcId) ? "|" + AddonTalkHelper.ActiveNpcId : "";
-                    bodyString = $"{((int)message)}{npcId}";
-                }
-
-                _webSocket!.Send(bodyString);
-                LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Sent '{message.ToString()}' to channel: {_activeChannel}", CurrentEvent!);
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error(MethodBase.GetCurrentMethod()!.Name, $"Error while sending message: {ex}", CurrentEvent!);
-            }
-        }
-
-        public static void CreateMessageFake(SyncMessages message, string? dialogue = "")
-        {
-            try
-            {
-                LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Sending '{message.ToString()}' to channel: {_activeChannel}", CurrentEvent!);
-                if (!Connected)
-                {
-                    LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Not connected: {_webSocket!.ReadyState}", CurrentEvent!);
-                    return;
-                }
-
-                var bodyString = $"{((int)message)}";
-                if (message == SyncMessages.StartNpc)
-                {
-                    var npcId = !string.IsNullOrWhiteSpace(AddonTalkHelper.ActiveNpcId) ? "|" + AddonTalkHelper.ActiveNpcId : "";
-                    bodyString = $"{((int)message)}{npcId}";
-                }
-
-                _webSocket!.Send(bodyString);
-                LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Sent '{message.ToString()}' to channel: {_activeChannel}", CurrentEvent!);
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error(MethodBase.GetCurrentMethod()!.Name, $"Error while sending message: {ex}", CurrentEvent!);
-            }
-        }
-
-        private static void Ws_OnMessageMain(object? sender, MessageEventArgs e)
-        {
-            var eventId = CurrentEvent;
-            var textMessage = e.Data;
-            try
-            {
-                var messageEnum = (SyncMessages)Convert.ToInt32(textMessage);
-
-                switch (messageEnum)
-                {
-                    case SyncMessages.CreateChannel:
-                        LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Server created channel", CurrentEvent!);
-                        _syncServerThread = _activeChannel;
-                        Connect();
-                        break;
-                    case SyncMessages.Test:
-                        LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Received command '{messageEnum}'", eventId!);
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error(MethodBase.GetCurrentMethod()!.Name, $"Received illegal message '{textMessage}' from main: {ex}", CurrentEvent!);
-            }
-        }
-
-        private static void WebSocket_OnOpenMain(object? sender, EventArgs e)
-        {
-            LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Connected to main server", CurrentEvent!);
-            RequestChannel(SyncMessages.CreateChannel, _activeChannel, Plugin.Configuration!.SyncPassword);
-        }
-
-        private static void WebSocket_OnCloseMain(object? sender, EventArgs e)
-        {
-            LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Disconnected from main server", CurrentEvent!);
-        }
-
-        private static void Ws_OnMessageChannel(object? sender, MessageEventArgs e)
-        {
-            var textMessage = e.Data;
-            try
-            {
-                var messageSplit = textMessage.Split('|');
-                var messageEnum = (SyncMessages)Convert.ToInt32(messageSplit[0]);
-
-                switch (messageEnum)
-                {
-                    case SyncMessages.ConnectedPlayersChannel:
-                        LogHelper.Debug(MethodBase.GetCurrentMethod()!.Name, $"Received message '{messageEnum}' in channel '{_activeChannel}'", CurrentEvent!);
-                        ConnectedPlayers.Clear();
-                        for (int i = 1; i < messageSplit.Length; i++)
-                        {
-                            if (!string.IsNullOrWhiteSpace(messageSplit[i]))
-                                ConnectedPlayers.Add(Convert.ToUInt32(messageSplit[i]));
-                        }
-                        break;
-                    case SyncMessages.ConnectedPlayersNpc:
-                        LogHelper.Debug(MethodBase.GetCurrentMethod()!.Name, $"Received message '{messageEnum}' in channel '{_activeChannel}'", CurrentEvent!);
-                        ConnectedPlayersNpc.Clear();
-                        for (int i = 1; i < messageSplit.Length; i++)
-                        {
-                            if (!string.IsNullOrWhiteSpace(messageSplit[i]))
-                                ConnectedPlayersNpc.Add(Convert.ToUInt32(messageSplit[i]));
-                        }
-                        break;
-                    case SyncMessages.RequestAuthentication:
-                        LogHelper.Debug(MethodBase.GetCurrentMethod()!.Name, $"Received message '{messageEnum}' in channel '{_activeChannel}'", CurrentEvent!);
-                        Authenticate(Plugin.Configuration!.SyncPassword, _entityId);
-                        break;
-                    case SyncMessages.ClickDone:
-                        AllReady = true;
-                        LogHelper.Debug(MethodBase.GetCurrentMethod()!.Name, $"Received message '{messageEnum}' in channel '{_activeChannel}'", CurrentEvent!);
-                        break;
-                    case SyncMessages.ClickWait:
-                        LogHelper.Debug(MethodBase.GetCurrentMethod()!.Name, $"Received message '{messageEnum}' in channel '{_activeChannel}'", CurrentEvent!);
-                        LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Waiting for other users", CurrentEvent!);
-                        break;
-                    case SyncMessages.ClickWaitCatchup:
-                        LogHelper.Debug(MethodBase.GetCurrentMethod()!.Name, $"Received message '{messageEnum}' in channel '{_activeChannel}'", CurrentEvent!);
-                        LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Waiting for other users to catch up", CurrentEvent!);
-                        break;
-                    case SyncMessages.ConnectedPlayersDialogue:
-                        ConnectedPlayersDialogue = Convert.ToInt32(messageSplit[1]);
-                        LogHelper.Debug(MethodBase.GetCurrentMethod()!.Name, $"Received message '{messageEnum} - {ConnectedPlayersDialogue}' in channel '{_activeChannel}'", CurrentEvent!);
-                        break;
-                    case SyncMessages.ConnectedPlayersReady:
-                        ConnectedPlayersReady = Convert.ToInt32(messageSplit[1]);
-                        LogHelper.Debug(MethodBase.GetCurrentMethod()!.Name, $"Received message '{messageEnum} - {ConnectedPlayersReady}' in channel '{_activeChannel}'", CurrentEvent!);
-                        break;
-                    case SyncMessages.ServerShutdown:
-                        LogHelper.Debug(MethodBase.GetCurrentMethod()!.Name, $"Received message '{messageEnum}' in channel '{_activeChannel}'", CurrentEvent!);
-                        Disconnect(true);
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error(MethodBase.GetCurrentMethod()!.Name, $"Received illegal message '{textMessage}' from channel: {_activeChannel}: {ex}", CurrentEvent!);
-            }
-        }
-
-        private static void WebSocket_OnOpenChannel(object? sender, EventArgs e)
-        {
-            LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Connected to channel '{_activeChannel}'", CurrentEvent!);
-            Connected = true;
-        }
-
-        private static void WebSocket_OnCloseChannel(object? sender, EventArgs e)
-        {
-            LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Disconnected from channel '{_activeChannel}'", CurrentEvent!);
-            _syncServerThread = "main";
-            Connected = false;
-        }
-
-        public static void Dispose()
-        {
-            Disconnect();
-        }
+    public void Dispose()
+    {
+        StopPositionReports();
+        Disconnect();
     }
 }

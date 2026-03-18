@@ -1,29 +1,49 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
 
-namespace Echosync_Server
+namespace Echosync.Server;
+
+public enum DialogueState
 {
-    public class UserState
-    {
-        public string WebSocketId {  get; set; } = "";
-        public string NetworkId { get; set; } = "";
-        public string IpAdress { get; set; } = "";
-        public string UserName { get; set; } = "";
-        public string NpcId { get; set; } = "";
-        public string Channel { get; set; } = "";
-        public int DialogueCount { get; set; } = 0;
-        public bool Ready { get; set; } = false;
+    Idle,
+    InDialogue,
+    WaitingAdvance,
+}
 
-        public UserState(string webSocketId, string networkId, string ipAdress, string userName, string channel) 
-        { 
-            this.WebSocketId = webSocketId;
-            this.NetworkId = networkId;
-            this.IpAdress = ipAdress;
-            this.UserName = userName; 
-            this.Channel = channel;
-        }
+public class UserState
+{
+    public string WebSocketId { get; set; }
+    public string SessionId { get; set; }
+    public string IpAddress { get; set; }
+    public string Channel { get; set; }
+
+    // Position tracking
+    public float PosX { get; set; }
+    public float PosY { get; set; }
+    public float PosZ { get; set; }
+    public DateTime LastPositionUpdate { get; set; } = DateTime.MinValue;
+
+    // Dialogue state
+    public DialogueState DialogueState { get; set; } = DialogueState.Idle;
+    public string NpcId { get; set; } = "";
+    public string CurrentDialogueHash { get; set; } = "";
+    public int DialogueIndex { get; set; }
+
+    // Advance request tracking
+    public bool AdvanceRequested { get; set; }
+    public DateTime AdvanceRequestedAt { get; set; } = DateTime.MinValue;
+
+    public UserState(string webSocketId, string ipAddress, string channel)
+    {
+        WebSocketId = webSocketId;
+        IpAddress = ipAddress;
+        Channel = channel;
+        SessionId = GenerateSessionId(webSocketId);
+    }
+
+    private static string GenerateSessionId(string webSocketId)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(webSocketId));
+        return Convert.ToHexString(bytes)[..8];
     }
 }

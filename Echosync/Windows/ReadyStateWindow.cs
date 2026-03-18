@@ -2,33 +2,48 @@ using System;
 using System.Numerics;
 using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
-using Echosync.DataClasses;
-using Echosync.Enums;
-using Echosync.Helper;
-using Dalamud.Interface.Utility;
 using Dalamud.Interface.Textures.TextureWraps;
-using Dalamud.Plugin.Services;
-using Lumina.Data.Files;
+using Dalamud.Interface.Utility;
 using Dalamud.Plugin;
+using Dalamud.Plugin.Services;
+using Echosync.DataClasses;
+using Echotools.Logging.DataClasses;
+using Echotools.Logging.Enums;
+using Echotools.Logging.Services;
+using Echosync.Helper;
+using Lumina.Data.Files;
 
 namespace Echosync.Windows;
 
 public class ReadyStateWindow : Window, IDisposable
 {
-    private IDalamudTextureWrap? ReadyCheckIconTexture { get; }
-    private IDalamudTextureWrap? WindowAButtonIconTexture { get; }
-    private IDalamudTextureWrap? ConfigPadCalibrationXInputIconTexture { get; }
+    private readonly Configuration _configuration;
+    private readonly SyncClientHelper _syncClient;
+    private readonly AddonTalkHelper _addonTalkHelper;
+    private readonly ILogService _log;
 
-    // We give this window a constant ID using ###
-    // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
-    // and the window ID will always be "###XYZ counter window" for ImGui
-    public ReadyStateWindow() : base("Echosync-ReadyState")
+    private IDalamudTextureWrap? ReadyCheckIconTexture { get; }
+
+    public ReadyStateWindow(
+        IDalamudPluginInterface pluginInterface,
+        ITextureProvider textureProvider,
+        IDataManager dataManager,
+        Configuration configuration,
+        SyncClientHelper syncClient,
+        AddonTalkHelper addonTalkHelper,
+        ILogService log)
+        : base($"Echosync {Plugin.PluginVersion}###EchosyncReadyState")
     {
+        _configuration = configuration;
+        _syncClient = syncClient;
+        _addonTalkHelper = addonTalkHelper;
+        _log = log;
+
         Flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoMove |
                 ImGuiWindowFlags.NoMouseInputs | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoBackground |
                 ImGuiWindowFlags.NoNav;
 
-        SizeConstraints = new WindowSizeConstraints()
+        SizeConstraints = new WindowSizeConstraints
         {
             MinimumSize = new Vector2(100, 100),
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue)
@@ -36,11 +51,8 @@ public class ReadyStateWindow : Window, IDisposable
         ForceMainWindow = true;
         RespectCloseHotkey = false;
         DisableWindowSounds = true;
-        ReadyCheckIconTexture = Plugin.TextureProvider.CreateFromTexFile(Plugin.DataManager.GetFile<TexFile>("ui/uld/ReadyCheck_hr1.tex")!);
-        var uldWrapper = Plugin.PluginInterface.UiBuilder.LoadUld("ui/uld/PartyMemberList.uld");
-        WindowAButtonIconTexture = uldWrapper.LoadTexturePart("ui/uld/WindowA_Button.tex", 1);
-        uldWrapper = Plugin.PluginInterface.UiBuilder.LoadUld("ui/uld/PerformanceGamePadGuide.uld");
-        ConfigPadCalibrationXInputIconTexture = uldWrapper.LoadTexturePart("ui/uld/ConfigPadCalibrationXinput.tex", 2);
+
+        ReadyCheckIconTexture = textureProvider.CreateFromTexFile(dataManager.GetFile<TexFile>("ui/uld/ReadyCheck_hr1.tex")!);
     }
 
     public void Dispose() { }
@@ -53,51 +65,31 @@ public class ReadyStateWindow : Window, IDisposable
 
     public override void Draw()
     {
-        DrawReadyStates();
-    }
-
-    private void DrawReadyStates()
-    {
         var drawList = ImGui.GetWindowDrawList();
-        var iconSize = new Vector2(24, 24) * AddonTalkHelper.AddonScale;
-        var iconSizeSmall = new Vector2(20, 20) * AddonTalkHelper.AddonScale;
+        var iconSize = new Vector2(24, 24) * _addonTalkHelper.AddonScale;
         var offsetX = 16;
 
-        if (SyncClientHelper.ConnectedPlayersDialogue > 0)
+        var connectedOthers = _syncClient.ConnectedPlayerCount;
+        if (connectedOthers <= 0 || !_syncClient.Connected || string.IsNullOrWhiteSpace(_addonTalkHelper.ActiveDialogue)) return;
+
+        var totalCount = _syncClient.SyncGroup.TotalCount > 0
+            ? _syncClient.SyncGroup.TotalCount
+            : connectedOthers + 1;
+        var readyCount = _syncClient.SyncGroup.ReadyCount;
+
+        var xPos = (_addonTalkHelper.AddonPos.X + _addonTalkHelper.AddonWidth) - ((offsetX + iconSize.X) * (totalCount + 1));
+        _log.Debug(nameof(Draw), $"{xPos}", new EKEventId(0, TextSource.None));
+
+        for (var i = 1; i <= totalCount; i++)
         {
-            var closePlayers = DalamudHelper.GetClosePlayers(SyncClientHelper.ConnectedPlayers, Plugin.Configuration.MaxPlayerDistance);
-            var xPos = (AddonTalkHelper.AddonPos.X + AddonTalkHelper.AddonWidth) - ((offsetX + iconSize.X) * (SyncClientHelper.ConnectedPlayers.Count + 2));
-            LogHelper.Debug("XPOS", $"{xPos}", new EKEventId(0, TextSource.None));
-            for (int i = 1; i <= SyncClientHelper.ConnectedPlayersDialogue; i++)
-            {
-                var iconPos = new Vector2(xPos * AddonTalkHelper.AddonScale, AddonTalkHelper.AddonPos.Y + 120 * AddonTalkHelper.AddonScale);
-                LogHelper.Debug("XPOS", $"{iconPos}", new EKEventId(0, TextSource.None));
-                var iconOffset = new Vector2(offsetX * (i - 1), 0) * AddonTalkHelper.AddonScale;
-                iconPos += iconOffset;
-                if (i <= SyncClientHelper.ConnectedPlayersReady)
-                    drawList.AddImage(ReadyCheckIconTexture!.Handle, iconPos, iconPos + iconSize, new Vector2(0.0f, 0.0f), new Vector2(0.5f, 1.0f));
-                else
-                    drawList.AddImage(ReadyCheckIconTexture!.Handle, iconPos, iconPos + iconSize, new Vector2(0.5f, 0.0f), new Vector2(1.0f));
-            }
-
-            for (int i = SyncClientHelper.ConnectedPlayersDialogue + 1; i <= SyncClientHelper.ConnectedPlayersNpc.Count + 1; i++)
-            {
-                var iconPos = new Vector2(xPos * AddonTalkHelper.AddonScale, AddonTalkHelper.AddonPos.Y + 120 * AddonTalkHelper.AddonScale);
-                var iconOffset = new Vector2(offsetX * (i - 1), 0) * AddonTalkHelper.AddonScale;
-                iconPos += iconOffset;
-                drawList.AddImage(ConfigPadCalibrationXInputIconTexture!.Handle, iconPos, iconPos + iconSizeSmall, new Vector2(0.0f, 0.0f), new Vector2(1.0f, 1.0f));
-            }
-
-            if (Plugin.Configuration.WaitForNearbyUsers)
-            {
-                for (int i = 1; i <= closePlayers; i++)
-                {
-                    var iconPos = new Vector2(xPos * AddonTalkHelper.AddonScale, AddonTalkHelper.AddonPos.Y + 120 * AddonTalkHelper.AddonScale);
-                    var iconOffset = new Vector2(offsetX * (SyncClientHelper.ConnectedPlayersNpc.Count + i), 0) * AddonTalkHelper.AddonScale;
-                    iconPos += iconOffset;
-                    drawList.AddImage(WindowAButtonIconTexture!.Handle, iconPos, iconPos + iconSize, new Vector2(0.0f, 0.0f), new Vector2(1.0f, 1.0f));
-                }
-            }
+            var iconPos = new Vector2(xPos * _addonTalkHelper.AddonScale, _addonTalkHelper.AddonPos.Y + 120 * _addonTalkHelper.AddonScale);
+            _log.Debug(nameof(Draw), $"{iconPos}", new EKEventId(0, TextSource.None));
+            var iconOffset = new Vector2(offsetX * (i - 1), 0) * _addonTalkHelper.AddonScale;
+            iconPos += iconOffset;
+            if (i <= readyCount)
+                drawList.AddImage(ReadyCheckIconTexture!.Handle, iconPos, iconPos + iconSize, new Vector2(0.0f, 0.0f), new Vector2(0.5f, 1.0f));
+            else
+                drawList.AddImage(ReadyCheckIconTexture!.Handle, iconPos, iconPos + iconSize, new Vector2(0.5f, 0.0f), new Vector2(1.0f));
         }
     }
 }
