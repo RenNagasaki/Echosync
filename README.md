@@ -89,4 +89,5 @@ In the plugin config, change the **Sync server** field to your server's address,
 
 ## Thanks
 
+- [MidoriKami](https://github.com/MidoriKami) for [KamiToolKit](https://github.com/MidoriKami/KamiToolKit) — the native UI framework that makes Echosync's in-game interface possible. An awesome library for building native FFXIV addon UIs.
 - Everyone contributing on the plugin-dev and dalamud-dev channels on the official [Dalamud](https://github.com/goatcorp/Dalamud) discord!
