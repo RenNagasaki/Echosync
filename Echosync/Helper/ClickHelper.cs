@@ -22,7 +22,7 @@ public static unsafe class ClickHelper
                     {
                         StateFlags = AtkEventStateFlags.Pooled | AtkEventStateFlags.Unk3,
                     },
-                    Target = &AtkStage.Instance()->AtkEventTarget
+                    Target = &AtkStage.Instance()->AtkEventTarget 
                 }
             };
             var data = stackalloc AtkEventData[1];

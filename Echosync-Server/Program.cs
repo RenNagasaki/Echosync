@@ -35,7 +35,7 @@ while (command != "quit")
 
             if (activeBot != null)
             {
-                activeBot.Dispose();
+                activeBot.Dispose(); 
                 activeBot = null;
                 LogHelper.Log("Main", "Previous bot removed");
             }
