@@ -16,6 +16,7 @@ public class ChannelState
     public readonly object SyncLock = new();
     public Dictionary<string, NpcPosition> NpcPositions { get; } = new();
     public ConcurrentQueue<string> PendingEvaluations { get; } = new();
+    public ConcurrentQueue<string> PendingSyncUpdates { get; } = new();
 
     private const float ProximityDistance = 3f;
     private static readonly TimeSpan StalePositionThreshold = TimeSpan.FromSeconds(5);

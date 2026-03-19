@@ -46,6 +46,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         InternalName = "EchosyncConfig";
         Title = $"Echosync {Plugin.PluginVersion}";
         Size = new Vector2(540, 480);
+        RespectCloseAll = false;
 
         _configuration = configuration;
         _syncClient = syncClient;

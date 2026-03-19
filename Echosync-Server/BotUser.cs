@@ -73,6 +73,7 @@ public class BotUser : IDisposable
                 _userState.CurrentDialogueHash != realUser.CurrentDialogueHash)
             {
                 _userState.CurrentDialogueHash = realUser.CurrentDialogueHash;
+                _channelState.PendingSyncUpdates.Enqueue(_userState.WebSocketId);
             }
 
             // Mirror advance request with delay
@@ -96,6 +97,7 @@ public class BotUser : IDisposable
             {
                 _userState.DialogueIndex = realUser.DialogueIndex;
                 _userState.CurrentDialogueHash = realUser.CurrentDialogueHash;
+                _channelState.PendingSyncUpdates.Enqueue(_userState.WebSocketId);
             }
         }
         catch (Exception ex)
@@ -120,6 +122,9 @@ public class BotUser : IDisposable
         }
 
         LogHelper.Log(_channelName, $"Bot '{_userState.SessionId}' entered dialogue with NPC '{realUser.NpcId}'");
+
+        // Notify clients that the sync group changed
+        _channelState.PendingSyncUpdates.Enqueue(_userState.WebSocketId);
     }
 
     private void RequestAdvance()

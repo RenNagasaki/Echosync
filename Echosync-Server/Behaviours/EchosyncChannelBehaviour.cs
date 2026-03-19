@@ -324,6 +324,14 @@ public class EchosyncChannelBehaviour : WebSocketBehavior
                     EvaluateAndRespond(user);
             }
 
+            // Process pending sync group updates (from bot enter/exit)
+            while (_channelState.PendingSyncUpdates.TryDequeue(out var syncWsId))
+            {
+                var user = _channelState.GetUser(syncWsId);
+                if (user is { DialogueState: not DialogueState.Idle })
+                    SendSyncGroupUpdate(user);
+            }
+
             // Check advance timeouts (30s)
             var timedOut = _channelState.CheckTimeouts();
             foreach (var user in timedOut)
