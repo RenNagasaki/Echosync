@@ -1,0 +1,21 @@
+# GitLab is the primary remote; GitHub (RenNagasaki/Echosync) is a read-only mirror.
+# Additive push (--all --force + --tags) on every push to the default branch or a tag.
+# Never `git push --mirror`: it deletes GitHub-only tags and breaks the Releases attached to them.
+# GITHUB_USER / GITHUB_PAT are group-level CI variables. The GitHub path is hardcoded on purpose:
+# GITHUB_USER is the PAT owner, not necessarily the repo owner.
+
+stages:
+  - mirror
+
+mirror-to-github:
+  stage: mirror
+  image: alpine/git:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+  script:
+    - git clone --mirror "$CI_REPOSITORY_URL" repo.git
+    - cd repo.git
+    - git remote add github "https://${GITHUB_USER}:${GITHUB_PAT}@github.com/RenNagasaki/Echosync.git"
+    - git push github --all --force
+    - git push github --tags
