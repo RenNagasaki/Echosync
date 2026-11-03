@@ -24,6 +24,7 @@ public unsafe class AddonTalkHelper : IDisposable
     private readonly Configuration _configuration;
     private readonly SyncClientHelper _syncClient;
     private readonly ILogService _log;
+    private readonly EchokrautIpcClient _echokrautIpc;
     public Action<bool>? OnDialogueVisibilityChanged { get; set; }
 
     public string ActiveNpcId { get; private set; } = "";
@@ -43,7 +44,8 @@ public unsafe class AddonTalkHelper : IDisposable
         IFramework framework,
         Configuration configuration,
         SyncClientHelper syncClient,
-        ILogService log)
+        ILogService log,
+        EchokrautIpcClient echokrautIpc)
     {
         _addonLifecycle = addonLifecycle;
         _objectTable = objectTable;
@@ -52,6 +54,7 @@ public unsafe class AddonTalkHelper : IDisposable
         _configuration = configuration;
         _syncClient = syncClient;
         _log = log;
+        _echokrautIpc = echokrautIpc;
 
         _addonLifecycle.RegisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
         _addonLifecycle.RegisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
@@ -149,6 +152,17 @@ public unsafe class AddonTalkHelper : IDisposable
 
         var eventData = (AtkEventData*)eventArgs.AtkEventData;
         if (eventData == null) return;
+
+        // If another plugin (e.g. Echokraut) already requested the original handler be skipped,
+        // it has consumed the click — don't roundtrip an advance through the sync server.
+        if (eventArgs.PreventOriginalRequested) return;
+
+        // Echokraut publishes a coord-based hit-test for its DialogExtraOptions toolbar
+        // (Play/Stop, Mute, Voice dropdown, Settings). Listener order isn't deterministic,
+        // so this catches the case where we run before Echokraut and PreventOriginalRequested
+        // hasn't been set yet.
+        if (_echokrautIpc.IsClickInEchokrautToolbar(eventData->MouseData.PosX, eventData->MouseData.PosY))
+            return;
 
         var eventType = (AtkEventType)eventArgs.AtkEventType;
         var isControllerButtonClick = eventType == AtkEventType.InputReceived && eventData->InputData.InputId == 1;

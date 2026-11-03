@@ -52,9 +52,10 @@ public sealed class Plugin : IDalamudPlugin
         var logService = new LogService(log);
         _syncClient = new SyncClientHelper(framework, objectTable, configuration, logService);
 
+        var echokrautIpc = new EchokrautIpcClient(pluginInterface);
         _addonTalkHelper = new AddonTalkHelper(
             addonLifecycle, objectTable, condition, framework, configuration,
-            _syncClient, logService);
+            _syncClient, logService, echokrautIpc);
 
         // Native UI (active)
         _nativeConfigWindow = new NativeConfigWindow(configuration, _syncClient, logService);
