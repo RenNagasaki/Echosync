@@ -1,0 +1,8 @@
+services:
+  echosync-server:
+    image: ghcr.io/rennagasaki/echosync-server:latest
+    ports:
+      - "2053:2053"
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/Logs

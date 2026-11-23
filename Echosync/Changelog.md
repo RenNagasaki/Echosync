@@ -1,0 +1,4 @@
+- Fixed UI
+- More specific click checks
+- Github Action for auto release
+- Changelog.md
